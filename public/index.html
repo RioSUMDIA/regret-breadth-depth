@@ -1,0 +1,1916 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Parallel 40-Option Grid (Noisy Observation) — sim-aligned</title>
+
+    <!-- jsPsych core & plugins -->
+    <script src="https://unpkg.com/jspsych@8.2.2"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-call-function@2.1.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-html-button-response@2.1.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@2.1.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-survey-likert@2.1.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-survey-multi-select@2.1.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-instructions@2.1.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-preload@2.1.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-html-slider-response@2.1.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-survey@4.0.0"></script>
+
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/@jspsych/plugin-survey@4.0.0/css/survey.min.css"
+    />
+    <link
+      href="https://unpkg.com/jspsych@8.2.2/css/jspsych.css"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/@jspsych/plugin-survey@4.0.0"></script>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/@jspsych/plugin-survey@4.0.0/css/survey.min.css"
+    />
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/survey-core/themes/layered-dark-panelless.min.js"
+    ></script>
+
+    <style>
+      :root {
+        --cols: 8;
+        --rows: 5;
+        --col-gap: 14px;
+        --row-gap: 12px;
+        --wrap-hpad: 16px;
+        --wrap-vpad: 10px;
+        --cell: 120px;
+        --meta-h: 100px;
+        --star-yellow: #ffc400;
+      }
+      html,
+      body,
+      .jspsych-display-element {
+        background: #000 !important;
+        color: #fff !important;
+        /* overflow: hidden; */
+      }
+      .jspsych-content {
+        background: transparent !important;
+      }
+      .jspsych-btn {
+        background: #1f1f1f !important;
+        color: #fff !important;
+        border: 1px solid #555 !important;
+        border-radius: 8px;
+      }
+      .jspsych-btn:hover {
+        background: #2a2a2a !important;
+      }
+
+      .slide-wrap {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+      .slide-img {
+        width: 100%;
+        height: auto;
+        max-width: 1600px;
+        max-height: 82vh;
+        object-fit: contain;
+        border-radius: 10px;
+        box-shadow: 0 6px 28px rgba(255, 255, 255, 0.08);
+      }
+      .slide-hint {
+        margin-top: 12px;
+        opacity: 0.7;
+        font-size: 14px;
+        text-align: center;
+      }
+
+      .grid-wrap {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        width: 100vw;
+        max-width: 1800px;
+        margin: 0 auto;
+        padding: var(--wrap-vpad) var(--wrap-hpad);
+        box-sizing: border-box;
+      }
+      .grid-meta {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0 12px;
+        background: linear-gradient(180deg, #000, #000d);
+      }
+      .meta-left {
+        justify-self: start;
+      }
+      .meta-mid {
+        justify-self: center;
+      }
+      .meta-right {
+        justify-self: end;
+      }
+
+      .remain-box {
+        border: 3px solid #93c5fd;
+        border-radius: 16px;
+        padding: 16px 18px;
+        min-width: clamp(260px, 28vw, 480px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        background: rgba(30, 58, 138, 0.12);
+      }
+      .remain-title {
+        font-weight: 900;
+        font-size: clamp(14px, 1.8vw, 20px);
+      }
+      .remain-count {
+        font-weight: 900;
+        font-size: clamp(18px, 2vw, 24px);
+      }
+      .remain-card {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: var(--cell);
+        height: var(--cell);
+        border-radius: 12px;
+        background: #cfe8cc;
+        color: #102a17;
+        border: 2px solid #7aa27a;
+        font-weight: 800;
+        box-shadow: inset 0 -6px 10px rgba(0, 0, 0, 0.12);
+      }
+      .remain-card.best {
+        border-color: #e11d48;
+        box-shadow: 0 0 0 3px #e11d48, 0 0 22px rgba(225, 29, 72, 0.45);
+      }
+      .remain-card .rc-value {
+        font-size: clamp(16px, 2.4vw, 28px);
+        color: #000;
+      }
+      .remain-card.hidden {
+        display: none;
+      }
+      .star-in-card,
+      .star-corner {
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        font-size: clamp(28px, 4vw, 56px);
+        line-height: 1;
+        color: var(--star-yellow);
+      }
+      .star-corner {
+        pointer-events: none;
+      }
+
+      .counter {
+        font-weight: 900;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.02em;
+        line-height: 1.25;
+        font-size: clamp(18px, 3.2vw, 44px);
+        text-align: center;
+      }
+      .add-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: clamp(10px, 1.8vw, 16px) clamp(20px, 3.2vw, 36px);
+        font-size: clamp(18px, 2.4vw, 28px);
+        font-weight: 900;
+        letter-spacing: 0.02em;
+        background: linear-gradient(180deg, #2563eb, #1e40af);
+        color: #fff;
+        border: 2px solid #93c5fd;
+        border-radius: 14px;
+        box-shadow: 0 8px 24px rgba(37, 99, 235, 0.35),
+          inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+        cursor: pointer;
+        user-select: none;
+        transition: transform 0.06s, filter 0.15s, box-shadow 0.15s;
+        min-width: clamp(180px, 28vw, 360px);
+      }
+      .add-btn:hover {
+        filter: brightness(1.08);
+      }
+      .add-btn:active {
+        transform: translateY(1px) scale(0.99);
+      }
+      .add-btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+        background: linear-gradient(180deg, #374151, #1f2937);
+        border-color: #6b7280;
+        box-shadow: none;
+      }
+
+      .grid {
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: repeat(var(--cols), var(--cell));
+        grid-auto-rows: var(--cell);
+        gap: var(--row-gap) var(--col-gap);
+        align-content: start;
+        height: calc(100vh - var(--meta-h) - var(--wrap-vpad) * 2);
+      }
+
+      .opt {
+        position: relative;
+        border: 2px solid #7aa27a;
+        border-radius: 12px;
+        background: #cfe8cc;
+        color: #102a17;
+        font-weight: 700;
+        cursor: pointer;
+        user-select: none;
+        transition: transform 0.05s, filter 0.15s;
+        overflow: hidden;
+      }
+      .opt:hover {
+        filter: brightness(1.05);
+      }
+      .opt:active {
+        transform: scale(0.98);
+      }
+      .opt.disabled {
+        filter: grayscale(1) brightness(0.8);
+        cursor: not-allowed;
+        border-color: #3a4d3a;
+      }
+      .opt.selected {
+        box-shadow: 0 0 0 3px #f59e0b, 0 0 20px rgba(245, 158, 11, 0.35);
+      }
+      .opt.best {
+        filter: none !important;
+        box-shadow: 0 0 0 3px #e11d48, 0 0 22px rgba(225, 29, 72, 0.45);
+        z-index: 2;
+      }
+      .opt.disabled.best {
+        filter: none !important;
+        cursor: default;
+      }
+      .pink-fill {
+        background: #ffd1e6 !important;
+        border-color: #f472b6 !important;
+      }
+
+      .opt-inner {
+        position: absolute;
+        inset: 8px;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        align-items: center;
+        justify-items: center;
+      }
+      .top {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        font-weight: 800;
+        padding: 0 4px;
+      }
+      .label {
+        font-size: clamp(12px, 1.2vw, 16px);
+        line-height: 1.12;
+        font-weight: 800;
+        color: #0b3d91;
+        letter-spacing: 0.02em;
+        background: rgba(11, 61, 145, 0.1);
+        border: 1px solid rgba(11, 61, 145, 0.35);
+        padding: 2px 6px;
+        border-radius: 8px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+      }
+      .value {
+        font-variant-numeric: tabular-nums;
+        font-size: clamp(16px, 2.4vw, 26px);
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        min-height: 1.1em;
+        color: #000;
+        padding: 0 4px;
+        text-align: center;
+      }
+      .opt[data-empty="true"] .value {
+        opacity: 0.5;
+      }
+
+      .mini {
+        font-variant-numeric: tabular-nums;
+        font-size: clamp(11px, 1.1vw, 14px);
+        line-height: 1.25;
+        color: #0d2f1d;
+        background: rgba(16, 58, 36, 0.1);
+        border: 1px solid rgba(16, 58, 36, 0.3);
+        border-radius: 8px;
+        padding: 3px 5px;
+        align-self: end;
+        font-weight: 800;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        max-width: 100%;
+        word-break: break-word;
+        text-align: center;
+      }
+      /* 観測履歴の表示を停止 */
+      .mini {
+        display: none !important;
+      }
+
+      .flash {
+        animation: flash 400ms ease;
+      }
+      @keyframes flash {
+        from {
+          box-shadow: 0 0 0 #fff;
+        }
+        50% {
+          box-shadow: 0 0 16px #fff;
+        }
+        to {
+          box-shadow: 0 0 0 #fff;
+        }
+      }
+
+      .choose-msg {
+        font-size: clamp(16px, 2vw, 28px);
+        font-weight: 900;
+        color: #fff;
+        text-align: center;
+        padding: 6px 12px;
+        border: 1px dashed #93c5fd;
+        border-radius: 12px;
+        background: rgba(30, 64, 175, 0.25);
+      }
+      .choose-msg.warn {
+        border-color: #fca5a5;
+        background: rgba(180, 30, 30, 0.22);
+      }
+
+      .coin-board {
+        max-width: 1100px;
+        margin: 30px auto 10px;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: clamp(16px, 3vw, 36px);
+        align-items: end;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+      .stack-bar {
+        width: clamp(90px, 18vw, 180px);
+        height: 0;
+        border-radius: 10px 10px 4px 4px;
+        background: repeating-linear-gradient(
+          to top,
+          #ffd86a,
+          #ffd86a 2px,
+          #e0bf55 2px,
+          #e0bf55 4px
+        );
+        box-shadow: inset 0 -10px 14px rgba(0, 0, 0, 0.2),
+          inset 0 10px 10px rgba(255, 255, 255, 0.15),
+          0 6px 22px rgba(0, 0, 0, 0.25);
+        border: 2px solid #a38122;
+        position: relative;
+      }
+      .stack-self .stack-bar {
+        background: repeating-linear-gradient(
+          to top,
+          #f87171 0px,
+          #f87171 2px,
+          #dc2626 2px,
+          #dc2626 4px
+        ) !important;
+        border-color: #991b1b;
+      }
+      .stack-num {
+        font-weight: 900;
+        font-size: clamp(16px, 1.8vw, 20px);
+      }
+      .stack-num.emph {
+        font-size: clamp(24px, 3.4vw, 44px);
+        letter-spacing: 0.02em;
+      }
+      .stack-label {
+        margin-top: 4px;
+        text-align: center;
+        font-weight: 900;
+        font-size: clamp(16px, 2.4vw, 24px);
+        opacity: 0.95;
+      }
+      .stack-sub {
+        margin-top: 4px;
+        text-align: center;
+        font-size: clamp(12px, 1.6vw, 16px);
+        opacity: 0.8;
+      }
+
+      .summary-title {
+        text-align: center;
+        font-weight: 900;
+        font-size: clamp(28px, 5vw, 65px);
+        margin: 10px 0 4px;
+      }
+      .result-banner {
+        text-align: center;
+        font-weight: 900;
+        font-size: clamp(24px, 3.2vw, 48px);
+        margin-top: 10px;
+      }
+      .result-banner.bad {
+        color: #fca5a5;
+      }
+      .result-banner.good {
+        color: #a7f3d0;
+      }
+
+      .next-fab {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        z-index: 1000;
+      }
+      .chosen-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        font-size: clamp(10px, 1vw, 12px);
+        font-weight: 900;
+        color: #fff;
+        background: #f59e0b;
+        border: 1px solid #fdba74;
+        border-radius: 9999px;
+        white-space: nowrap;
+      }
+
+      /* Likert layout（通常） */
+      body.likert-blue .jspsych-content,
+      body.likert-blue .jspsych-content-wrapper,
+      body.likert-blue .jspsych-survey-likert {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 0 28px;
+        box-sizing: border-box;
+      }
+
+      /* ▼ 追加：Likertページでスクロール許可＆ボタンのための下余白 */
+      body.likert-scroll {
+        overflow: auto !important;
+      }
+      body.likert-blue .jspsych-content-wrapper {
+        max-height: 100vh;
+        overflow: auto;
+        padding-bottom: 84px;
+        box-sizing: border-box;
+      }
+      /* ▼ 追加：Likertの「次へ」をstickyで常に見える位置に */
+      body.likert-blue .jspsych-survey-likert .jspsych-btn {
+        position: sticky;
+        bottom: 12px;
+        z-index: 20;
+        margin-top: 12px;
+        background: #1f2937 !important;
+        border-color: #6b7280 !important;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+      }
+      /* ▼ 教示の文字を少し大きく */
+      body.likert-blue .jspsych-survey-likert-preamble {
+        margin-top: 18px;
+        margin-bottom: 6px;
+        font-size: clamp(16px, 1.9vw, 22px);
+        line-height: 1.6;
+        text-align: left;
+        color: #e5e7eb;
+        background: rgba(59, 130, 246, 0.08);
+        border: 1px solid rgba(59, 130, 246, 0.28);
+        border-radius: 10px;
+        padding: 8px 12px;
+      }
+      /* ▼ 指定フレーズの強調（赤太字） */
+      body.likert-blue .jspsych-survey-likert-preamble .preamble-accent {
+        color: #ef4444;
+        font-weight: 900;
+      }
+
+      body.likert-blue .jspsych-survey-likert-question {
+        margin: 22px 0;
+      }
+      body.likert-blue .jspsych-survey-likert-statement {
+        font-size: clamp(16px, 1.8vw, 22px);
+        line-height: 1.4;
+        font-weight: 900;
+        text-align: left;
+      }
+      body.likert-blue .jspsych-survey-likert-opts {
+        position: relative;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 0;
+        min-height: 96px;
+      }
+      body.likert-blue .jspsych-survey-likert-opts::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        height: 2px;
+        transform: translateY(-50%);
+        background: rgba(255, 255, 255, 0.75);
+        border-radius: 2px;
+      }
+      body.likert-blue .jspsych-survey-likert-opts li {
+        list-style: none;
+        display: flex;
+        justify-content: flex-start;
+      }
+      body.likert-blue .jspsych-survey-likert-opts label {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 44px;
+        min-height: 96px;
+        cursor: pointer;
+      }
+      body.likert-blue .jspsych-survey-likert-opts input[type="radio"] {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 22px;
+        height: 22px;
+        margin: 0;
+        accent-color: #60a5fa;
+      }
+      body.likert-blue
+        .jspsych-survey-likert-opts
+        li:nth-child(1)
+        input[type="radio"] {
+        transform: translate(-50%, -50%) scale(0.95) !important;
+      }
+      body.likert-blue
+        .jspsych-survey-likert-opts
+        li:nth-child(2)
+        input[type="radio"] {
+        transform: translate(-50%, -50%) scale(1.15) !important;
+      }
+      body.likert-blue
+        .jspsych-survey-likert-opts
+        li:nth-child(3)
+        input[type="radio"] {
+        transform: translate(-50%, -50%) scale(1.2) !important;
+      }
+      body.likert-blue
+        .jspsych-survey-likert-opts
+        li:nth-child(4)
+        input[type="radio"] {
+        transform: translate(-50%, -50%) scale(1.35) !important;
+      }
+      body.likert-blue
+        .jspsych-survey-likert-opts
+        li:nth-child(5)
+        input[type="radio"] {
+        transform: translate(-50%, -50%) scale(1.5) !important;
+      }
+      body.likert-blue
+        .jspsych-survey-likert-opts
+        li:nth-child(6)
+        input[type="radio"] {
+        transform: translate(-50%, -50%) scale(1.65) !important;
+      }
+      body.likert-blue
+        .jspsych-survey-likert-opts
+        li:nth-child(7)
+        input[type="radio"] {
+        transform: translate(-50%, -50%) scale(1.8) !important;
+      }
+      body.likert-blue .jspsych-survey-likert-opt-label {
+        position: absolute;
+        left: 50%;
+        top: calc(50% + 20px);
+        transform: translateX(-50%);
+        margin-top: 0;
+        font-size: clamp(12px, 1.4vw, 15px);
+        text-align: center;
+        line-height: 1.2;
+        color: #93c5fd;
+        font-weight: 700;
+      }
+      body.likert-blue
+        .jspsych-survey-likert-opts
+        li:first-child
+        .jspsych-survey-likert-opt-label,
+      body.likert-blue
+        .jspsych-survey-likert-opts
+        li:last-child
+        .jspsych-survey-likert-opt-label {
+        font-weight: 900;
+        color: #60a5fa;
+      }
+
+      /* 追加：コンパクト段階 */
+      body.likert-compact .jspsych-survey-likert-preamble {
+        font-size: clamp(13px, 1.4vw, 16px);
+        padding: 6px 10px;
+      }
+      body.likert-compact .jspsych-survey-likert-question {
+        margin: 16px 0;
+      }
+      body.likert-compact .jspsych-survey-likert-statement {
+        font-size: clamp(14px, 1.6vw, 18px);
+      }
+      body.likert-compact .jspsych-survey-likert-opts {
+        padding: 10px 0;
+        min-height: 84px;
+      }
+      body.likert-compact .jspsych-survey-likert-opts label {
+        min-height: 84px;
+        min-width: 40px;
+      }
+      body.likert-compact .jspsych-survey-likert-opts input[type="radio"] {
+        width: 16px;
+        height: 16px;
+      }
+      body.likert-compact
+        .jspsych-survey-likert-opts
+        li:nth-child(n)
+        input[type="radio"] {
+        transform: translate(-50%, -50%) scale(1.05) !important;
+      }
+      body.likert-compact .jspsych-survey-likert-opt-label {
+        top: calc(50% + 16px);
+        font-size: clamp(11px, 1.2vw, 13px);
+      }
+
+      /* 追加：ウルトラ段階 */
+      body.likert-ultra .jspsych-content,
+      body.likert-ultra .jspsych-content-wrapper,
+      body.likert-ultra .jspsych-survey-likert {
+        max-width: 860px;
+        padding: 0 20px;
+      }
+      body.likert-ultra .jspsych-survey-likert-preamble {
+        font-size: clamp(12px, 1.3vw, 14px);
+        padding: 6px 8px;
+      }
+      body.likert-ultra .jspsych-survey-likert-question {
+        margin: 12px 0;
+      }
+      body.likert-ultra .jspsych-survey-likert-statement {
+        font-size: clamp(13px, 1.4vw, 16px);
+        line-height: 1.35;
+      }
+      body.likert-ultra .jspsych-survey-likert-opts {
+        padding: 8px 0;
+        min-height: 72px;
+      }
+      body.likert-ultra .jspsych-survey-likert-opts label {
+        min-height: 72px;
+        min-width: 36px;
+      }
+      body.likert-ultra .jspsych-survey-likert-opts input[type="radio"] {
+        width: 18px;
+        height: 18px;
+      }
+      body.likert-ultra
+        .jspsych-survey-likert-opts
+        li:nth-child(n)
+        input[type="radio"] {
+        transform: translate(-50%, -50%) scale(0.95) !important;
+      }
+      body.likert-ultra .jspsych-survey-likert-opt-label {
+        top: calc(50% + 12px);
+        font-size: clamp(10px, 1.1vw, 12px);
+      }
+      body.likert-ultra .jspsych-content-wrapper {
+        padding-bottom: 84px;
+      }
+
+      body.feedback-scroll {
+        overflow: auto !important;
+      }
+
+      /* 中央オーバーレイ（濃色・白背景） */
+      .stack-bar[data-banner]::after {
+        content: attr(data-banner);
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        background: #fff;
+        padding: 8px 14px;
+        border-radius: 10px;
+        border: 2px solid #111827;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+        pointer-events: none;
+        white-space: nowrap;
+        font-weight: 900;
+        text-align: center;
+        font-size: clamp(18px, 2.8vw, 40px);
+        line-height: 1.2;
+        color: #111827;
+        z-index: 2;
+      }
+      .stack.good .stack-bar[data-banner]::after {
+        color: #065f46;
+        border-color: #064e3b;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+      }
+      .stack.bad .stack-bar[data-banner]::after {
+        color: #b91c1c;
+        border-color: #7f1d1d;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+      }
+    </style>
+  </head>
+  <body></body>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import {
+      getDatabase,
+      ref,
+      push,
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    // TODO: Replace the following with your app's Firebase project configuration
+    // See: https://support.google.com/firebase/answer/7015592
+    const firebaseConfig = {
+      apiKey: "AIzaSyCfvcXAdpr69iphPELwPdrEfBnklW31h90",
+      authDomain: "restaurant-79715.firebaseapp.com",
+      databaseURL:
+        "https://restaurant-79715-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "restaurant-79715",
+      storageBucket: "restaurant-79715.firebasestorage.app",
+      messagingSenderId: "813127109809",
+      appId: "1:813127109809:web:ec8a9aad3e4cc45ea52690",
+      measurementId: "G-Y4GMHF1T2Y",
+    };
+    let user_chosen_points = []; //各試行の結果の格納
+    let global_best_points = []; //各試行の結果の格納
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+
+    // Initialize Cloud Firestore and get a reference to the service
+    const db = getDatabase(app);
+    const db_ref = ref(db, "post_jj");
+
+    // =====================
+    // ★ 実験パラメータ
+    // =====================
+    const N = 40;
+    const MAX_OBS_PER_BLOCK = 40;
+    const ENV_ALPHA = 2;
+    const ENV_BETA = 2;
+    const SIGMA01 = 0.5;
+
+    const minVal = 10,
+      maxVal = 100;
+    const toPoints01 = (x01) => Math.round(minVal + (maxVal - minVal) * x01);
+    const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+
+    // =====================
+    // 乱数ヘルパ
+    // =====================
+    function sampleGammaIntK(k) {
+      let s = 0.0;
+      for (let i = 0; i < k; i++) s += -Math.log(Math.random());
+      return s;
+    }
+    function sampleBeta01_alpha_beta(alpha, beta) {
+      const g1 = sampleGammaIntK(alpha),
+        g2 = sampleGammaIntK(beta);
+      return g1 / (g1 + g2);
+    }
+
+    // =====================
+    // レイアウト
+    // =====================
+    function computeAndSetCellSize() {
+      const root = document.documentElement,
+        vw = window.innerWidth,
+        vh = window.innerHeight;
+      const getPx = (v) =>
+        parseFloat(getComputedStyle(root).getPropertyValue(v)) || 0;
+      const cols = 8,
+        rows = 5,
+        hpad = getPx("--wrap-hpad"),
+        vpad = getPx("--wrap-vpad"),
+        colGap = getPx("--col-gap"),
+        rowGap = getPx("--row-gap");
+      const meta = document.querySelector(".grid-meta");
+      const metaH = meta ? meta.getBoundingClientRect().height : 100;
+      root.style.setProperty("--meta-h", `${metaH}px`);
+      const availW = vw - hpad * 2 - colGap * (cols - 1),
+        availH = vh - metaH - vpad * 2 - rowGap * (rows - 1);
+      const cellW = availW / cols,
+        cellH = availH / rows;
+      const cell = Math.floor(Math.max(40, Math.min(cellW, cellH)));
+      root.style.setProperty("--cell", `${cell}px`);
+    }
+    window.addEventListener("resize", computeAndSetCellSize);
+
+    // =====================
+    // jsPsych
+    // =====================
+    const jsPsych = initJsPsych({ override_safe_mode: true });
+    var preload = { type: jsPsychPreload, auto_preload: true };
+
+    const SLIDE_PATHS = Array.from({ length: 41 }, (_, i) => ({
+      primary: `./img/スライド${i + 1}.png`,
+      fallback: `./img/スライド${i + 1}.png`,
+    }));
+    const instructionSlides = SLIDE_PATHS.map(
+      (p, i) => `
+      <div class="slide-wrap">
+        <div>
+          <img class="slide-img" src="${p.primary}" data-fallback="${
+        p.fallback
+      }"
+               alt="説明スライド ${i + 1}/41"
+               onerror="if(this.dataset.fallback&&this.src!==this.dataset.fallback){this.src=this.dataset.fallback;}">
+          <div class="slide-hint">矢印キー（← →）で進みます（${i + 1}/41）</div>
+        </div>
+      </div>`
+    );
+    const instTrial = {
+      type: jsPsychInstructions,
+      pages: instructionSlides,
+      show_clickable_nav: true,
+    };
+
+    // =====================
+    // 実験状態
+    // =====================
+    const options = Array.from({ length: N }, (_, i) => `コック ${i + 1}`);
+    let trueValues = Array.from({ length: N }, () =>
+      sampleBeta01_alpha_beta(ENV_ALPHA, ENV_BETA)
+    );
+    let obsHistory = Array.from({ length: N }, () => []);
+    const sigma = SIGMA01;
+    let visibleCount = 1;
+
+    let clicksRemaining = MAX_OBS_PER_BLOCK;
+    let clicksUsedThisTrial = 0;
+    let observedChoiceList = [];
+    let observedPointList = [];
+    let lastFinalIdx = null;
+    let current_trial_number = 0;
+
+    let exploreData = jsPsych.data;
+    exploreData.addProperties({
+      explore_count: 0,
+      observed_best_choice: 0,
+      observed_choice_order: "",
+      observed_point_order: "",
+      phase_str: "",
+      sigma01: sigma,
+      env_alpha: ENV_ALPHA,
+      env_beta: ENV_BETA,
+      trial_number: 0,
+      user_chosen_point: 0,
+      user_unchosen_max_point: 0,
+      user_observed_max_point: null,
+      regret_choose: 0,
+      regret_explore_total: 0,
+      chosen_true01: 0,
+      observed_best_true01: 0,
+      overall_best_true01: 0,
+    });
+
+    const scale = [
+      "全くそう思わない",
+      " ",
+      " ",
+      " ",
+      " ",
+      " ",
+      "非常にそう思う",
+    ];
+    let lastLikert = { S9: null, S10: null, S11: null, S12: null };
+    let selectedSnapshot = {
+      idx: null,
+      chosenTrue: null,
+      obsBestIdx: null,
+      obsBestTrue: null,
+    };
+
+    // =====================
+    // UI ヘルパ
+    // =====================
+    const unobservedCount = () => Math.max(0, N - visibleCount);
+    function rightRemainHTML() {
+      return `<div class="remain-box" id="remain-box">
+        <div class="remain-title">調べていないコック</div>
+        <div class="remain-count"><span id="remain-num">${unobservedCount()}</span> 人</div>
+        <div class="remain-card" id="remain-card"><div class="rc-value" id="remain-card-value">調べていない</div></div>
+      </div>`;
+    }
+    function refreshRemainBox({ showValue = null, showStar = false } = {}) {
+      const box = document.getElementById("remain-box");
+      if (!box) return;
+      const countEl = document.getElementById("remain-num");
+      const cardEl = document.getElementById("remain-card");
+      const valueEl = document.getElementById("remain-card-value");
+      const cnt = unobservedCount();
+      if (countEl) countEl.textContent = cnt;
+      const oldIn = box.querySelector(".star-in-card");
+      if (oldIn) oldIn.remove();
+      if (cardEl) cardEl.classList.remove("best", "pink-fill");
+      if (cnt <= 0) {
+        if (cardEl) cardEl.classList.add("hidden");
+      } else {
+        if (cardEl) cardEl.classList.remove("hidden");
+        if (typeof showValue === "number") {
+          if (valueEl) valueEl.textContent = String(showValue);
+        } else {
+          if (valueEl) valueEl.textContent = "調べていない";
+        }
+        if (showStar && cardEl) {
+          cardEl.classList.add("best", "pink-fill");
+          cardEl.insertAdjacentHTML(
+            "beforeend",
+            `<span class="star-in-card">★</span>`
+          );
+        }
+      }
+    }
+
+    function resetBlockState() {
+      trueValues = Array.from({ length: N }, () =>
+        sampleBeta01_alpha_beta(ENV_ALPHA, ENV_BETA)
+      );
+      obsHistory = Array.from({ length: N }, () => []);
+      visibleCount = 1;
+      lastFinalIdx = null;
+      observedChoiceList = [];
+      observedPointList = [];
+      clicksRemaining = MAX_OBS_PER_BLOCK;
+      clicksUsedThisTrial = 0;
+      selectedSnapshot = {
+        idx: null,
+        chosenTrue: null,
+        obsBestIdx: null,
+        obsBestTrue: null,
+      };
+    }
+
+    function cardHTML(i) {
+      const n = obsHistory[i].length;
+      const last = n ? obsHistory[i][n - 1] : "調べていない";
+      const mini = n ? obsHistory[i].slice(-3).join("・") : "—";
+      return `<div class="opt" data-idx="${i}" data-empty="${
+        n ? "false" : "true"
+      }" aria-label="${options[i]}">
+        <div class="opt-inner">
+          <div class="top"><span class="label">${options[i]}</span></div>
+          <div class="value" aria-hidden="true">${last}</div>
+          <div class="mini" aria-hidden="true">${mini}</div>
+        </div>
+      </div>`;
+    }
+
+    function gridHTML(metaMidHTML = null) {
+      const cards = options
+        .slice(0, visibleCount)
+        .map((_, i) => cardHTML(i))
+        .join("");
+      return `<div class="grid-wrap">
+        <div class="grid-meta">
+          <div class="meta-left"><div class="counter" id="counter">調べられる残りの日数：<br><strong>${clicksRemaining}</strong>日</div></div>
+          <div class="meta-mid">${
+            metaMidHTML ??
+            `<button class="add-btn" id="add-card">新たなコックを調べる</button>`
+          }</div>
+          <div class="meta-right">${rightRemainHTML()}</div>
+        </div>
+        <div class="grid" id="grid">${cards}</div>
+      </div>`;
+    }
+
+    function updateCounterUI() {
+      const el = document.getElementById("counter");
+      if (el)
+        el.innerHTML = `調べられる残りの日数：<br><strong>${clicksRemaining}</strong>日`;
+    }
+    function disableInteractions() {
+      const btn = document.getElementById("add-card");
+      if (btn) btn.disabled = true;
+      const grid = document.getElementById("grid");
+      if (grid) grid.style.pointerEvents = "none";
+    }
+
+    // ★ 変更：自動終了せず、イベント通知だけを行う
+    function consumeClickAndMaybeFinish() {
+      clicksRemaining = Math.max(0, clicksRemaining - 1);
+      clicksUsedThisTrial += 1;
+      updateCounterUI();
+      if (clicksRemaining <= 0) {
+        // 自動で trial を閉じない。UIだけロックしてイベント通知
+        disableInteractions();
+        document.dispatchEvent(new CustomEvent("obs_exhausted"));
+      }
+    }
+
+    function observeOnce(idx, cardEl) {
+      if (clicksRemaining <= 0) return;
+      const mu01 = trueValues[idx];
+      const noise01 = jsPsych.randomization.sampleNormal(0, sigma);
+      const val01 = mu01 + noise01;
+      const valPoint = clamp(toPoints01(val01), minVal, maxVal);
+      obsHistory[idx].push(valPoint);
+      cardEl.classList.remove("flash");
+      void cardEl.offsetWidth;
+      cardEl.classList.add("flash");
+      cardEl.querySelector(".value").textContent = valPoint;
+      cardEl.setAttribute("data-empty", "false");
+      cardEl.querySelector(".mini").textContent = obsHistory[idx]
+        .slice(-3)
+        .join("・");
+      observedChoiceList.push(idx);
+      observedPointList.push(valPoint);
+      consumeClickAndMaybeFinish();
+
+      // // ▼ 追加：クリックイベントを1行として保存
+      jsPsych.data.addProperties({
+        event: "observe_click",
+        idx, // 押したセル（0始まり）
+        click_num: clicksUsedThisTrial + 1,
+        visible_count: visibleCount,
+        value_point: valPoint,
+        trial_number: current_trial_number,
+        phase_str: "ExploreTrial",
+      });
+    }
+
+    const overallMaxIdx = () => {
+      let m = 0;
+      for (let i = 1; i < N; i++) if (trueValues[i] > trueValues[m]) m = i;
+      return m;
+    };
+
+    // ===== 探索 =====
+    const exploreTrial = {
+      type: jsPsychHtmlKeyboardResponse,
+      choices: "NO_KEYS",
+      stimulus: () => gridHTML(),
+      on_load: () => {
+        observedChoiceList = [];
+        observedPointList = [];
+        clicksUsedThisTrial = 0;
+        const grid = document.getElementById("grid");
+        const addBtn = document.getElementById("add-card");
+        let firstCardObserved = false;
+
+        if (addBtn) {
+          addBtn.disabled = true;
+          addBtn.title = "最初のコックを一度調べると追加できます";
+        }
+
+        function unlockAddButtonIfReady(idx) {
+          if (!firstCardObserved && idx === 0 && obsHistory[0].length > 0) {
+            firstCardObserved = true;
+            if (clicksRemaining > 0 && visibleCount < N && addBtn) {
+              addBtn.disabled = false;
+              addBtn.title = "";
+            }
+          }
+        }
+        function addOneCardAndAutoObserve() {
+          if (visibleCount >= N || !firstCardObserved) return;
+          const newIdx = visibleCount;
+          visibleCount += 1;
+          const wrapper = document.createElement("div");
+          wrapper.innerHTML = cardHTML(newIdx);
+          const cardEl = wrapper.firstElementChild;
+          grid.appendChild(cardEl);
+          if (clicksRemaining > 0) observeOnce(newIdx, cardEl);
+          refreshRemainBox();
+          if (visibleCount >= N && addBtn) addBtn.disabled = true;
+          computeAndSetCellSize();
+
+          jsPsych.data.addProperties({
+            event: "add_card",
+            added_idx: newIdx,
+            after_first_observed: true,
+            trial_number: current_trial_number,
+            phase_str: "ExploreTrial",
+          });
+        }
+
+        // ▼ クリックで観測
+        grid.addEventListener("click", (e) => {
+          const card = e.target.closest(".opt");
+          if (!card || clicksRemaining <= 0) return;
+          const idx = +card.dataset.idx;
+          observeOnce(idx, card);
+          unlockAddButtonIfReady(idx);
+        });
+
+        // ▼ 追加ボタン（残数がある間のみ有効）
+        if (addBtn)
+          addBtn.addEventListener("click", () => {
+            if (clicksRemaining <= 0 || !firstCardObserved) return;
+            addOneCardAndAutoObserve();
+          });
+
+        // ===== 残数0になったら中央ボタンを「選択へ進む」に置換 =====
+        function showProceedButton() {
+          const metaMid = document.querySelector(".meta-mid");
+          if (!metaMid) return;
+          metaMid.innerHTML = `
+            <button class="add-btn" id="proceed-to-choice">選択へ進む</button>
+          `;
+          const proceedBtn = document.getElementById("proceed-to-choice");
+          if (proceedBtn) {
+            proceedBtn.addEventListener("click", () => {
+              proceedBtn.disabled = true; // 二度押し防止
+              jsPsych.finishTrial({ proceed: true });
+            });
+          }
+        }
+        const __onExhausted = () => showProceedButton();
+        document.addEventListener("obs_exhausted", __onExhausted);
+
+        // 念のため：ロード時点で既に0なら即差し替え（通常は起きない）
+        if (clicksRemaining <= 0) showProceedButton();
+
+        // クリーンアップ参照を保持
+        exploreTrial.__cleanup = () => {
+          document.removeEventListener("obs_exhausted", __onExhausted);
+        };
+
+        updateCounterUI();
+        computeAndSetCellSize();
+        refreshRemainBox();
+      },
+      on_finish: () => {
+        // イベント解除（メモリリーク防止）
+        if (typeof exploreTrial.__cleanup === "function")
+          exploreTrial.__cleanup();
+
+        jsPsych.data.get().addToLast({
+          explore_count: clicksUsedThisTrial,
+          observed_choice_order: observedChoiceList.join("_"),
+          observed_point_order: observedPointList.join("_"),
+          phase_str: "ExploreTrial",
+        });
+        current_trial_number += 1;
+        jsPsych.data.get().addToLast({ trial_number: current_trial_number });
+      },
+    };
+
+    // ===== 選択 =====
+    let final_choice_idx = -1;
+    let observed_best_choice_idx = -1;
+    const chooseOnGridTrial = {
+      type: jsPsychHtmlKeyboardResponse,
+      choices: "NO_KEYS",
+      stimulus: () => {
+        const anyObs = obsHistory.some((h) => h.length > 0);
+        const msg = anyObs
+          ? `<div class="choose-msg">調べたコックの中から1人選んでください（クリックで選択）</div>`
+          : `<div class="choose-msg warn">どのコックも調べていません。任意のコックを1人選んでください（クリックで選択）</div>`;
+        return gridHTML(msg);
+      },
+      on_load: () => {
+        const metaLeft = document.querySelector(".meta-left");
+        if (metaLeft) metaLeft.style.visibility = "hidden";
+        const grid = document.getElementById("grid");
+        const addBtn = document.getElementById("add-card");
+        if (addBtn) addBtn.disabled = true;
+        updateCounterUI();
+        computeAndSetCellSize();
+        refreshRemainBox();
+
+        const anyObs = obsHistory.some((h) => h.length > 0);
+        if (anyObs)
+          grid.querySelectorAll(".opt").forEach((card) => {
+            const idx = +card.dataset.idx;
+            if (obsHistory[idx].length === 0) card.classList.add("disabled");
+          });
+
+        function insertChosenBadge(el) {
+          if (!el) return;
+          const old = el.querySelector(".chosen-badge");
+          if (old) old.remove();
+          el.insertAdjacentHTML(
+            "beforeend",
+            '<span class="chosen-badge">あなたが選んだ</span>'
+          );
+        }
+        function addStarToCard(cardEl) {
+          if (!cardEl) return;
+          const old = cardEl.querySelector(".star-corner");
+          if (old) old.remove();
+          cardEl.insertAdjacentHTML(
+            "beforeend",
+            `<span class="star-corner" aria-label="全体最大">★</span>`
+          );
+        }
+
+        function handleChoose(idx, cardEl) {
+          if (obsHistory[idx].length === 0 && anyObs) return;
+          final_choice_idx = idx;
+          lastFinalIdx = idx;
+
+          const observedIdxs = obsHistory
+            .map((h, i) => (h.length ? i : -1))
+            .filter((i) => i >= 0);
+          let obsBestIdx = idx;
+          if (observedIdxs.length)
+            obsBestIdx = observedIdxs.reduce((a, b) =>
+              trueValues[a] >= trueValues[b] ? a : b
+            );
+          const chosenTrue = toPoints01(trueValues[idx]);
+          const obsBestTrue = toPoints01(trueValues[obsBestIdx]);
+          const oMaxIdx = overallMaxIdx();
+          const oMaxTrue = toPoints01(trueValues[oMaxIdx]);
+
+          grid.querySelectorAll(".opt").forEach((el) => {
+            el.classList.add("disabled");
+            el.style.pointerEvents = "none";
+            el.classList.remove("best", "pink-fill");
+            const v = el.querySelector(".value"),
+              m = el.querySelector(".mini");
+            if (el !== cardEl) {
+              if (v) v.textContent = "";
+              if (m) m.textContent = " ";
+            }
+          });
+          cardEl.classList.remove("disabled");
+          cardEl.classList.add("selected");
+          const valueDiv = cardEl.querySelector(".value"),
+            miniDiv = cardEl.querySelector(".mini"),
+            labelDiv = cardEl.querySelector(".label");
+          if (labelDiv) labelDiv.textContent = options[idx];
+          insertChosenBadge(cardEl.querySelector(".top"));
+
+          observed_best_choice_idx = obsBestIdx;
+          if (obsBestIdx === idx) {
+            cardEl.classList.add("pink-fill");
+          } else {
+            const bestCard = grid.querySelector(
+              `.opt[data-idx="${obsBestIdx}"]`
+            );
+            if (bestCard) {
+              bestCard.classList.add("best", "pink-fill");
+              const v = bestCard.querySelector(".value"),
+                m = bestCard.querySelector(".mini");
+              if (v) v.textContent = String(obsBestTrue);
+              if (m) m.textContent = " ";
+            }
+          }
+          if (valueDiv) valueDiv.textContent = String(chosenTrue);
+          if (miniDiv) miniDiv.textContent = " ";
+
+          if (oMaxIdx < visibleCount) {
+            addStarToCard(grid.querySelector(`.opt[data-idx="${oMaxIdx}"]`));
+            refreshRemainBox();
+          } else {
+            refreshRemainBox({ showValue: oMaxTrue, showStar: true });
+          }
+
+          selectedSnapshot = { idx, chosenTrue, obsBestIdx, obsBestTrue };
+          setTimeout(() => jsPsych.finishTrial({ final_idx: idx }), 200);
+        }
+
+        grid.addEventListener("click", (e) => {
+          const card = e.target.closest(".opt");
+          if (!card || card.classList.contains("disabled")) return;
+          const idx = +card.dataset.idx;
+          handleChoose(idx, card);
+        });
+      },
+      on_finish: (data) => {
+        const idx =
+          typeof data.final_idx === "number"
+            ? data.final_idx
+            : Number.isInteger(lastFinalIdx)
+            ? lastFinalIdx
+            : 0;
+        data.final_idx = idx;
+        data.observed_best_choice = observed_best_choice_idx;
+        lastFinalIdx = idx;
+      },
+    };
+
+    // ===== 確認 =====
+    const confirmSelectionTrial = {
+      type: jsPsychHtmlButtonResponse,
+      choices: ["次へ"],
+      stimulus: () =>
+        `<div id="confirm-root">${gridHTML(
+          `<div class="choose-msg">選んだコックを確認したら「次へ」を押してください</div>`
+        )}</div>`,
+      on_load: () => {
+        document
+          .querySelectorAll(".jspsych-btn")
+          .forEach((b) => b.classList.add("next-fab"));
+        const grid = document.getElementById("grid");
+        if (!grid || selectedSnapshot.idx == null) return;
+        const metaLeft = document.querySelector(".meta-left");
+        if (metaLeft) metaLeft.style.visibility = "hidden";
+
+        grid.querySelectorAll(".opt").forEach((el) => {
+          el.classList.add("disabled");
+          el.style.pointerEvents = "none";
+          el.classList.remove("best", "pink-fill");
+          const v = el.querySelector(".value"),
+            m = el.querySelector(".mini");
+          if (v) v.textContent = "";
+          if (m) m.textContent = " ";
+        });
+
+        function insertChosenBadge(el) {
+          if (!el) return;
+          const old = el.querySelector(".chosen-badge");
+          if (old) old.remove();
+          el.insertAdjacentHTML(
+            "beforeend",
+            '<span class="chosen-badge">あなたが選んだ</span>'
+          );
+        }
+        function addStarToCard(cardEl) {
+          if (!cardEl) return;
+          const old = cardEl.querySelector(".star-corner");
+          if (old) old.remove();
+          cardEl.insertAdjacentHTML(
+            "beforeend",
+            `<span class="star-corner" aria-label="全体最大">★</span>`
+          );
+        }
+
+        const chosenCard = grid.querySelector(
+          `.opt[data-idx="${selectedSnapshot.idx}"]`
+        );
+        if (chosenCard) {
+          chosenCard.classList.remove("disabled");
+          chosenCard.classList.add("selected");
+          const valueDiv = chosenCard.querySelector(".value"),
+            labelDiv = chosenCard.querySelector(".label");
+          if (labelDiv) labelDiv.textContent = options[selectedSnapshot.idx];
+          insertChosenBadge(chosenCard.querySelector(".top"));
+          if (valueDiv)
+            valueDiv.textContent = String(selectedSnapshot.chosenTrue);
+        }
+
+        if (selectedSnapshot.obsBestIdx != null) {
+          const bestCard = grid.querySelector(
+            `.opt[data-idx="${selectedSnapshot.obsBestIdx}"]`
+          );
+          if (bestCard) {
+            bestCard.classList.add("best", "pink-fill");
+            const v = bestCard.querySelector(".value"),
+              m = bestCard.querySelector(".mini");
+            if (v) v.textContent = String(selectedSnapshot.obsBestTrue);
+            if (m) m.textContent = " ";
+          }
+        }
+
+        const oMaxIdx = overallMaxIdx();
+        const oMaxTrue = toPoints01(trueValues[oMaxIdx]);
+        if (oMaxIdx < visibleCount) {
+          addStarToCard(grid.querySelector(`.opt[data-idx="${oMaxIdx}"]`));
+          refreshRemainBox();
+        } else {
+          refreshRemainBox({ showValue: oMaxTrue, showStar: true });
+        }
+
+        updateCounterUI();
+        computeAndSetCellSize();
+      },
+      on_finish: (data) => {
+        data.phase_str = "ConfirmSelection";
+        data.final_idx = selectedSnapshot.idx;
+        lastFinalIdx = selectedSnapshot.idx;
+      },
+    };
+
+    // ===== フィードバック =====
+    const feedbackSummaryTrial = {
+      type: jsPsychHtmlButtonResponse,
+      choices: ["次へ"],
+      stimulus: () => {
+        const chosenIdx = Number.isInteger(lastFinalIdx)
+          ? lastFinalIdx
+          : selectedSnapshot.idx ?? 0;
+        const chosenTrue = toPoints01(trueValues[chosenIdx]);
+        const overallIdx = overallMaxIdx();
+        const overallTrue = toPoints01(trueValues[overallIdx]);
+
+        const observedIdxs = obsHistory
+          .map((h, i) => (h.length ? i : -1))
+          .filter((i) => i >= 0);
+        let obsBestIdxVal = chosenIdx;
+        if (observedIdxs.length)
+          obsBestIdxVal = observedIdxs.reduce((a, b) =>
+            trueValues[a] >= trueValues[b] ? a : b
+          );
+        const obsBestTrue = toPoints01(trueValues[obsBestIdxVal]);
+
+        const isPerfect =
+          chosenTrue === overallTrue && obsBestTrue === chosenTrue;
+
+        const RESERVE_TOP = 180,
+          RESERVE_BOTTOM = 160;
+        const vh = window.innerHeight || 800;
+        const maxStackPx = Math.max(120, vh - (RESERVE_TOP + RESERVE_BOTTOM));
+        const H0 = 8;
+        const H = Math.min(
+          H0,
+          Math.floor(maxStackPx / Math.max(1, overallTrue))
+        );
+        const hLeft = overallTrue * H;
+        const hMid = (isPerfect ? overallTrue : obsBestTrue) * H;
+        const hRight =
+          (isPerfect ? overallTrue : Math.max(0, Math.min(100, chosenTrue))) *
+          H;
+        const reducePt = Math.max(0, overallTrue - chosenTrue);
+
+        const coinStack = (
+          klass,
+          extraClass,
+          h,
+          topText,
+          label,
+          sub,
+          bannerText = ""
+        ) => `
+          <div class="stack ${klass} ${extraClass}">
+            <div class="stack-num">${topText ?? ""}</div>
+            <div class="stack-bar" style="height:${h}px;" ${
+          bannerText ? `data-banner="${bannerText}"` : ""
+        }></div>
+            <div class="stack-label">${label}</div>
+            <div class="stack-sub">${sub ?? ""}</div>
+          </div>`;
+
+        const title = `<div class="summary-title">この回の結果に基づき報酬が減額される場合</div>`;
+        const bannerText = isPerfect ? "セーフ！" : "ざんねん！";
+        const stateClass = isPerfect ? "good" : "bad";
+
+        const coins = `
+          <div class="coin-board">
+            ${coinStack("stack-100", "", hLeft, "", "全体で一番高い", "")}
+            ${coinStack("stack-diff", "", hMid, "", "調べた中で一番高い", "")}
+            ${coinStack(
+              "stack-self",
+              stateClass,
+              hRight,
+              isPerfect ? "" : reducePt + "pt分減額",
+              "あなたの報酬",
+              "",
+              bannerText
+            )}
+          </div>`;
+        return `<div class="summary-wrap">${title}${coins}</div>`;
+      },
+      on_load: () => {
+        document.body.classList.add("feedback-scroll");
+        document
+          .querySelectorAll(".jspsych-btn")
+          .forEach((b) => b.classList.add("next-fab"));
+      },
+      on_finish: (data) => {
+        document.body.classList.remove("feedback-scroll");
+        const chosenIdx = Number.isInteger(lastFinalIdx)
+          ? lastFinalIdx
+          : selectedSnapshot.idx ?? 0;
+        const chosenTrue01 = trueValues[chosenIdx];
+        const overallIdx = overallMaxIdx();
+        const overallTrue01 = trueValues[overallIdx];
+        const observedIdxs = obsHistory
+          .map((h, i) => (h.length ? i : -1))
+          .filter((i) => i >= 0);
+        let obsBestIdxVal = chosenIdx;
+        if (observedIdxs.length)
+          obsBestIdxVal = observedIdxs.reduce((a, b) =>
+            trueValues[a] >= trueValues[b] ? a : b
+          );
+        const obsBestTrue01 = trueValues[obsBestIdxVal];
+
+        const chosenPt = toPoints01(chosenTrue01);
+        const overallPt = toPoints01(overallTrue01);
+        const obsBestPt = toPoints01(obsBestTrue01);
+
+        const regretChoose = Math.max(0, obsBestPt - chosenPt);
+        const regretExplore = Math.max(0, overallPt - chosenPt);
+
+        data.phase_str = "FeedbackSummary";
+        data.finalChoice = chosenIdx;
+        data.trial_number = current_trial_number;
+        data.user_chosen_point = chosenPt;
+        user_chosen_points.push(chosenPt);
+
+        data.user_observed_max_point = obsBestPt;
+        data.user_unchosen_max_point = overallPt;
+        global_best_points.push(overallPt);
+
+        data.regret_choose = regretChoose;
+        data.regret_explore_total = regretExplore;
+        data.global_seen = false;
+
+        data.chosen_true01 = chosenTrue01;
+        data.observed_best_true01 = obsBestTrue01;
+        data.overall_best_true01 = overallTrue01;
+      },
+    };
+
+    const surveyTrialSlider = {
+      type: jsPsychSurvey,
+      survey_json: {
+        completeText: "→",
+        elements: [
+          {
+            type: "html",
+            name: "introduction",
+            html: '<p style="text-align: justify;">今のあなたの素直な気持ちについて、以下の質問に ⚪️ を動かして回答してください。<p>',
+          },
+          {
+            type: "slider",
+            name: "inner-regret",
+            title:
+              "調べたコックの中で、別のコックを選べばよかったと後悔している",
+            description: "「全くそう思わない」= 0 | 「非常にそう思う」 = 100 ",
+            isRequired: true,
+          },
+          {
+            type: "slider",
+            name: "satisficing",
+            title: "自分の選択に対して満足している",
+            description: "「全くそう思わない」= 0 | 「非常にそう思う」 = 100 ",
+            isRequired: true,
+          },
+          {
+            type: "slider",
+            name: "disappointment",
+            title: "この結果に対してがっかりしている",
+            description: "「全くそう思わない」= 0 | 「非常にそう思う」 = 100 ",
+            isRequired: true,
+          },
+          {
+            type: "slider",
+            name: "successful",
+            title: "自分の選択は成功したと思う",
+            description: "「全くそう思わない」= 0 | 「非常にそう思う」 = 100 ",
+            isRequired: true,
+          },
+          {
+            type: "slider",
+            name: "outer-regret",
+            title:
+              "新たなコックを追加し、多くのコックを調べればよかったと後悔している",
+            description: "「全くそう思わない」= 0 | 「非常にそう思う」 = 100 ",
+            isRequired: true,
+          },
+        ],
+      },
+    };
+    function writeBlockSummaryFunc() {
+      // try {
+      //   const last_trial = jsPsych.data.get().last(1).values[0];
+      //   // phase_strが'FeedbackSummary'で、かつmainCountが1以上（本番試行）の場合にデータを保存
+      //   if (last_trial.phase_str === "FeedbackSummary" && mainCount > 0) {
+      //     main_trial_results.push({
+      //       chosen_option: last_trial.user_chosen_point, // 選択したコックの真の報酬（点数）
+      //       overall_max_point: last_trial.user_unchosen_max_point, // 全体で最も高い報酬（点数）
+      //     });
+      //   }
+      // } catch (e) {
+      //   console.error("block_summary write failed:", e);
+      // }
+
+      // console.log(user_chosen_points);
+      // console.log(global_best_points);
+      const hello = 0;
+    }
+    // ▼ 修正: writeBlockSummary の定義をここに移動
+    const writeBlockSummary = {
+      type: jsPsychCallFunction,
+      func: writeBlockSummaryFunc,
+    };
+    // ===== ブロック =====
+    const block = {
+      timeline: [
+        {
+          type: jsPsychCallFunction,
+          func: () => {
+            resetBlockState();
+          },
+        },
+        exploreTrial,
+        chooseOnGridTrial,
+        confirmSelectionTrial,
+        feedbackSummaryTrial,
+        surveyTrialSlider,
+        writeBlockSummary,
+      ],
+    };
+
+    // ===== フロー =====
+    let practiceCount = 0,
+      mainCount = 0;
+    const practiceIntro = {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `<div class="inst"><p><strong>これから練習課題を3回</strong>行います（報酬には含みません）。`,
+      choices: ["OK"],
+    };
+    const practiceProgress = {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: () =>
+        `<div class="inst"><p>練習 <strong>${
+          practiceCount + 1
+        }</strong> / 3 回目</p></div>`,
+      choices: ["開始"],
+      on_finish: () => {
+        practiceCount += 1;
+      },
+    };
+    const practiceOutro = {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `<div class="inst"><p>練習課題は以上です。確認テストへ進んでください。</p></div>`,
+      choices: ["確認テストへ"],
+    };
+    const mainProgress = {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: () =>
+        `<div class="inst"><p>本番 <strong>${
+          mainCount + 1
+        }</strong> / 10 回目</p></div>`,
+      choices: ["開始"],
+      on_finish: () => {
+        mainCount += 1;
+      },
+    };
+
+    const QUIZ_OPTIONS = [
+      "1人ずつ新たなコックを追加することができ、最大40人のコックが表示される。",
+      "コックをクリックするとそのコックが作る料理の得点を知ることができる。",
+      "40日間で料理を食べて腕前を調べる際（新たなコックを調べる・これまでに調べたコックを再度調べる）、1日に1人のコックの料理しか食べることができない。",
+      "40日が経過すると、あなたが選んだコックの実力が知らされる。",
+      "あなたのオーナーとしての報酬は減額形式であり、10回の課題のうち、いずれか1回の結果で報酬が減額される金額が決まる。",
+    ];
+    const CORRECT_SET = new Set(QUIZ_OPTIONS);
+    let quizPassed = false;
+    const quiz = {
+      type: jsPsychSurveyMultiSelect,
+      preamble: `<div class="inst"><strong>確認テスト</strong><br>正しいものをすべて選んでください（複数選択可）.</div>`,
+      questions: [
+        { prompt: "", options: QUIZ_OPTIONS, required: true, name: "check" },
+      ],
+      button_label: "回答する",
+      on_finish: (d) => {
+        const sel = new Set(d.response?.check || []);
+        quizPassed =
+          sel.size === CORRECT_SET.size &&
+          [...sel].every((s) => CORRECT_SET.has(s));
+      },
+    };
+    const quizFail = {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `<div class="inst"><p style="color:#c00;font-weight:700;">✗ 不正解です.</p><p>スライドをもう一度確認して、再度テストに回答してください。</p></div>`,
+      choices: ["もう一度回答する"],
+    };
+    const quizScreen = {
+      timeline: [
+        quiz,
+        { conditional_function: () => !quizPassed, timeline: [quizFail] },
+      ],
+      loop_function: () => !quizPassed,
+    };
+    const quizPassScreen = {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `<div class="inst"><p style="color:#0a0;font-weight:700;">✓ 確認テストに正解しました！</p><p>準備ができたら本番を始めましょう。</p></div>`,
+      choices: ["本番を始める"],
+    };
+
+    const demographics = {
+      type: jsPsychSurvey,
+      survey_json: {
+        title: "",
+        completeText: "回答を送信",
+        pageNextText: "次へ",
+        pagePrevText: "前へ",
+        pages: [
+          {
+            name: "page1",
+            elements: [
+              {
+                type: "radiogroup",
+                title: "性別についてお答えください。",
+                name: "sex",
+                isRequired: true,
+                choices: ["男性", "女性", "その他/答えたくない"],
+              },
+              {
+                type: "text",
+                title: "年齢",
+                name: "age",
+                isRequired: true,
+                inputType: "number",
+                min: 18,
+                max: 102,
+                defaultValue: 20,
+              },
+            ],
+          },
+        ],
+      },
+    };
+    // 減額結果の表示試行
+    const finalReductionTrial = {
+      type: jsPsychHtmlButtonResponse,
+      choices: ["次へ"],
+      stimulus: () => {
+        let stimulus_html = "";
+
+        if (user_chosen_points.length === 0) {
+          // データがない場合のフォールバック（通常は発生しないはず）
+          stimulus_html = `
+                <div style="max-width:900px;margin:0 auto;text-align:center;">
+                    <p>最終減額の結果を計算できませんでした。</p>
+                </div>`;
+          return stimulus_html;
+        }
+
+        // 1. ランダムに1試行を選択
+        const randomIndex = Math.floor(
+          Math.random() * user_chosen_points.length
+        );
+        // 2. 最大報酬との差分を計算（減額ポイント）
+        const chosen_option = user_chosen_points[randomIndex];
+        const overall_max_point = global_best_points[randomIndex];
+        const reduction_pt = Math.max(0, overall_max_point - chosen_option);
+
+        // 3. 表示コンテンツの作成
+        let result_text = `<p><strong>本番10試行の結果から、ランダムに選ばれた1試行（${
+          randomIndex + 1
+        }回目）の結果に基づき、最終報酬が決定されます。</strong></p>`;
+
+        if (reduction_pt > 0) {
+          result_text += `
+                <p>この試行で<strong>全体で一番高い報酬</strong>は <strong>${overall_max_point}pt</strong> でしたが、あなたの<strong>選んだコックの報酬</strong>は <strong>${chosen_option}pt</strong> でした。</p>
+                <h3 style="color:#ef4444; font-size: 28px; margin: 20px 0;">最終的に、あなたの実験報酬は 「${reduction_pt}pt」減額されます。実験謝礼をお渡ししますので、「次に進まず実験者を呼んで」お待ちください。</h3>
+                <p style="opacity: 0.8;">（最大報酬との差分 ${overall_max_point}pt - ${chosen_option}pt = ${reduction_pt}pt）</p>
+            `;
+        } else {
+          result_text += `
+                <p>この試行で<strong>全体で一番高い報酬</strong> (${overall_max_point}pt) と、あなたの<strong>選んだコックの報酬</strong> (${chosen_option}pt) は<strong>同額</strong>でした。</p>
+                <h3 style="color:#a7f3d0; font-size: 28px; margin: 20px 0;">最終的に、あなたの実験報酬は 「0pt 減額」されます。実験謝礼をお渡ししますので、「次に進まず実験者を呼んで」お待ちください。</h3>
+                <p style="opacity: 0.8;">（減額なし）</p>
+            `;
+        }
+
+        stimulus_html = `
+            <div style="max-width:900px;margin:0 auto;text-align:center;line-height:1.6;">
+                <h2 style="font-size: 36px; margin-bottom: 30px;">最終報酬の計算</h2>
+                ${result_text}
+            </div>`;
+
+        console.log("chosen point:", chosen_option);
+        console.log("global best point:", overall_max_point);
+        console.log("reduction point:", reduction_pt);
+
+        return stimulus_html;
+      },
+      on_load: () => {
+        // ボタンを右下に固定するスタイルを適用
+        document
+          .querySelectorAll(".jspsych-btn")
+          .forEach((b) => b.classList.add("next-fab"));
+      },
+      on_finish: (data) => {
+        data.phase_str = "FinalReduction";
+      },
+    };
+    function tsFilename(prefix, ext) {
+      const d = new Date(),
+        pad = (n) => String(n).padStart(2, "0");
+      const stamp =
+        d.getFullYear() +
+        pad(d.getMonth() + 1) +
+        pad(d.getDate()) +
+        "_" +
+        pad(d.getHours()) +
+        pad(d.getMinutes()) +
+        pad(d.getSeconds());
+      return `${prefix}_${stamp}.${ext}`;
+    }
+    let __saveMessage = "データ保存中…";
+    const saveDataTrial = {
+      type: jsPsychCallFunction,
+      func: async function () {
+        const expId = "demo_v1";
+        const pid = jsPsych.randomization.randomID(8);
+        const sid = jsPsych.randomization.randomID(6);
+        try {
+          // const csvName = tsFilename("experiment_data", "csv");
+          // jsPsych.data.get().localSave("csv", csvName);
+          // const jsonName = tsFilename("experiment_data", "json");
+          // jsPsych.data.get().localSave("json", jsonName);
+          const all_trial_data = jsPsych.data.get().json();
+          // all_trial_data._meta = { expId, pid, sid, createdAt: Date.now() };
+          push(db_ref, all_trial_data);
+          __saveMessage = "保存完了";
+        } catch (e) {
+          console.error("Save failed:", e);
+          __saveMessage = "保存に失敗しました";
+        }
+      },
+    };
+
+    const finish = {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: () =>
+        `<div style="max-width:900px;margin:0 auto;text-align:center;line-height:1.10;"><p>これで実験は終了です。ありがとうございました。</p><p>${__saveMessage}</p></div>`,
+      choices: ["完了"],
+    };
+
+    // ---------- Run ----------
+    const timelines = [
+      preload,
+      instTrial,
+      practiceIntro,
+      {
+        timeline: [
+          practiceProgress,
+          {
+            timeline: [
+              { type: jsPsychCallFunction, func: () => resetBlockState() },
+              exploreTrial,
+              chooseOnGridTrial,
+              confirmSelectionTrial,
+              feedbackSummaryTrial,
+              surveyTrialSlider,
+              writeBlockSummary,
+            ],
+          },
+        ],
+        repetitions: 3,
+      },
+      practiceOutro,
+      quizScreen,
+      quizPassScreen,
+      {
+        type: jsPsychCallFunction,
+        func: () => {
+          practiceCount = 0;
+          mainCount = 0;
+        },
+      },
+      {
+        timeline: [
+          mainProgress,
+          {
+            timeline: [
+              { type: jsPsychCallFunction, func: () => resetBlockState() },
+              exploreTrial,
+              chooseOnGridTrial,
+              confirmSelectionTrial,
+              feedbackSummaryTrial,
+              surveyTrialSlider,
+              writeBlockSummary,
+            ],
+          },
+        ],
+        repetitions: 10,
+      },
+      demographics,
+      finalReductionTrial,
+      saveDataTrial,
+      finish,
+    ];
+    jsPsych.run(timelines);
+    // jsPsych.simulate(timelines, "visual");
+  </script>
+</html>

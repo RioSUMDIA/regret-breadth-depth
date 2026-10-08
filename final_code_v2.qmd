@@ -1,0 +1,1245 @@
+---
+title: "Lab Exp (RS reviewed)"
+format: html
+editor: source
+---
+
+```{r}
+rm(list = ls())
+pacman::p_load("tidyverse")
+```
+
+```{r}
+dat <- read.csv("behavior-18.csv")
+dat_demo <- read.csv("demographics_2.csv")
+```
+
+
+# demografic
+```{r}
+# one of them is test data (age = 100)
+exclude_ids <- dat_demo |>
+  filter(age >= 100) |>
+  pull(user_id)
+
+dat <- dat |>
+  filter(!(gsub("-", "", user_id) %in% exclude_ids))
+
+# gender
+dat_demo <- dat_demo |>
+  filter(age < 100)
+
+table(dat_demo$sex)
+
+# age
+mean(dat_demo$age)
+sd(dat_demo$age)
+table(dat_demo$age)
+
+dplyr::n_distinct(dat$user_id)
+```
+
+
+# excluding data
+```{r}
+# trial
+dat_analysis <- dat |>
+  mutate(round = round + 1)
+summary(dat_analysis$round)
+
+# check
+stopifnot(all(table(dat_analysis$user_id) == 13))
+
+# except practice trials
+dat_analysis <- dat_analysis |>
+  filter(round >= 4)
+
+
+glimpse(dat_analysis)
+```
+
+
+```{r}
+boxplot(dat_analysis$explore_count) # OK
+
+# emotional rating check
+straightline_rows <- dat_analysis |>
+  dplyr::filter(
+    satisficing == disappointment,
+    disappointment == successful,
+    successful == outer.regret,
+    outer.regret == inner.regret
+  )
+nrow(straightline_rows)
+
+table(dat_analysis$explore_count)
+
+# storage error
+dat_analysis |>
+  dplyr::filter(explore_count == 0) |>
+  dplyr::select(user_id, round, explore_count, explore_rt, survey_rt)
+
+dat_analysis <- dat_analysis |>
+  dplyr::filter(explore_count >= 1) # storage errors
+
+# explore_count_next / explore_count_diff are pre-computed in the raw CSV,
+# so the trial just before a storage error still carries k_{t+1} = 0
+dat_analysis |>
+  dplyr::filter(explore_count_next == 0) |>
+  dplyr::select(
+    user_id, round, explore_count,
+    explore_count_next, explore_count_diff
+  )
+
+dat_analysis <- dat_analysis |>
+  dplyr::mutate(
+    explore_count_diff = replace(
+      explore_count_diff,
+      explore_count_next %in% 0, NA
+    ),
+    explore_count_next = replace(
+      explore_count_next,
+      explore_count_next %in% 0, NA
+    )
+  )
+
+
+boxplot(dat_analysis$explore_count) # OK
+glimpse(dat_analysis)
+```
+
+
+# Subjective regret reflects objective breadth and depth deficits
+
+## Objective loss and subjective regret
+```{r}
+# objective loss
+library(dplyr)
+
+dat_analysis <- dat_analysis |>
+  mutate(
+    # depth-deficit loss
+    theo_inner_regret = observed_best - user_chosen_point,
+
+    # breadth-deficit loss
+    theo_outer_regret = global_best - observed_best
+  )
+
+glimpse(dat_analysis)
+summary(dat_analysis$theo_inner_regret)
+summary(dat_analysis$theo_outer_regret)
+```
+
+
+## Between losses and subjective emotions
+```{r}
+library(lme4)
+library(lmerTest)
+
+dat_analysis <- dat_analysis |>
+  mutate(
+    z_theo_outer_regret = as.numeric(scale(theo_outer_regret)),
+    z_theo_inner_regret = as.numeric(scale(theo_inner_regret)),
+    z_outer_regret = as.numeric(scale(outer.regret)),
+    z_inner_regret = as.numeric(scale(inner.regret)),
+    z_disappointment = as.numeric(scale(disappointment)),
+    z_satisfaction = as.numeric(scale(satisficing)),
+    z_successful = as.numeric(scale(successful)),
+    z_round = as.numeric(scale(round))
+  )
+
+# breadth-deficit loss and subjective breadth regret
+breadthloss_breadthsubject <- lmer(
+  z_outer_regret ~ z_theo_outer_regret + (z_theo_outer_regret | user_id),
+  data = dat_analysis
+)
+
+summary(breadthloss_breadthsubject)
+
+# breadth-deficit loss and subjective depth regret
+breadthloss_depthsubject <- lmer(
+  z_inner_regret ~ z_theo_outer_regret + (z_theo_outer_regret | user_id),
+  data = dat_analysis
+)
+
+summary(breadthloss_depthsubject)
+
+
+# depth-deficit loss and subjective depth regret
+depthloss_depthsubject <- lmer(
+  z_inner_regret ~ z_theo_inner_regret + (z_theo_inner_regret | user_id),
+  data = dat_analysis
+)
+
+summary(depthloss_depthsubject)
+
+# depth-deficit loss and subjective breadth regret
+depthloss_breadthsubject <- lmer(
+  z_outer_regret ~ z_theo_inner_regret + (z_theo_inner_regret | user_id),
+  data = dat_analysis
+)
+
+summary(depthloss_breadthsubject)
+```
+
+```{r}
+library(ggplot2)
+library(patchwork)
+
+slope_pvalue <- function(model) {
+  co <- summary(model)$coefficients
+  if ("Pr(>|t|)" %in% colnames(co)) {
+    co[2, "Pr(>|t|)"] # lmerTest::lmer
+  } else if ("p-value" %in% colnames(co)) {
+    co[2, "p-value"] # nlme::lme
+  } else {
+    NA_real_
+  }
+}
+
+stars <- function(p) {
+  if (is.na(p)) {
+    ""
+  } else if (p < .001) {
+    "***"
+  } else if (p < .01) {
+    "**"
+  } else if (p < .05) {
+    "*"
+  } else {
+    " (n.s.)"
+  }
+}
+
+plot_lmm <- function(
+  model,
+  x_var,
+  y_var,
+  data,
+  title,
+  significant = NULL,
+  x_label = x_var,
+  y_label = y_var,
+  base_size = 11
+) {
+  indiv_coefs <- as.data.frame(coef(model)$user_id)
+  names(indiv_coefs) <- c("b0", "b1")
+  fe <- fixef(model)
+
+  p_val <- slope_pvalue(model)
+  if (is.null(significant)) {
+    significant <- !is.na(p_val) && p_val < .05
+  }
+
+  line_col <- if (significant) "#2166ac" else "#aaaaaa"
+  fe_col <- if (significant) "#d73027" else "#555555"
+  subtitle <- paste0("β = ", round(fe[2], 2), stars(p_val))
+
+  ggplot(data, aes(x = .data[[x_var]], y = .data[[y_var]])) +
+    geom_point(alpha = 0.15, size = 0.7, color = "grey40") +
+    geom_abline(
+      data = indiv_coefs,
+      aes(intercept = b0, slope = b1),
+      alpha = 0.25,
+      color = line_col,
+      linewidth = 0.3
+    ) +
+    geom_abline(
+      intercept = fe["(Intercept)"],
+      slope = fe[2],
+      color = fe_col,
+      linewidth = 1.2
+    ) +
+    labs(title = title, subtitle = subtitle, x = x_label, y = y_label) +
+    theme_classic(base_size = base_size) +
+    theme(
+      plot.title = element_text(size = base_size - 1, face = "bold"),
+      plot.subtitle = element_text(size = base_size - 2)
+    )
+}
+```
+
+```{r}
+# each loss and subjective regret
+p1 <- plot_lmm(
+  breadthloss_breadthsubject,
+  "z_theo_outer_regret",
+  "z_outer_regret",
+  dat_analysis,
+  "Breadth loss → Breadth regret",
+  TRUE,
+  x_label = "Breadth-deficit loss (z)",
+  y_label = "Breadth regret (z)"
+)
+
+p2 <- plot_lmm(
+  breadthloss_depthsubject,
+  "z_theo_outer_regret",
+  "z_inner_regret",
+  dat_analysis,
+  "Breadth loss → Depth regret",
+  FALSE,
+  x_label = "Breadth-deficit loss (z)",
+  y_label = "Depth regret (z)"
+)
+
+p3 <- plot_lmm(
+  depthloss_breadthsubject,
+  "z_theo_inner_regret",
+  "z_outer_regret",
+  dat_analysis,
+  "Depth loss → Breadth regret",
+  FALSE,
+  x_label = "Depth-deficit loss (z)",
+  y_label = "Breadth regret (z)"
+)
+
+p4 <- plot_lmm(
+  depthloss_depthsubject,
+  "z_theo_inner_regret",
+  "z_inner_regret",
+  dat_analysis,
+  "Depth loss → Depth regret",
+  TRUE,
+  x_label = "Depth-deficit loss (z)",
+  y_label = "Depth regret (z)"
+)
+
+(p1 | p2) / (p3 | p4)
+```
+
+```{r}
+# sum of subjective regret and gain point
+dat_analysis <- dat_analysis |>
+  mutate(
+    emo_sum = outer.regret + inner.regret,
+    z_emo_sum = as.vector(scale(emo_sum)),
+    z_point = as.vector(scale(user_chosen_point))
+  )
+
+# regret sum → gain point
+regretsum_point <- lmer(
+  z_point ~ z_emo_sum + (z_emo_sum | user_id),
+  data = dat_analysis
+)
+summary(regretsum_point)
+
+plot_lmm(
+  regretsum_point,
+  "z_emo_sum",
+  "z_point",
+  dat_analysis,
+  "Sum of regret → Gain point",
+  x_label = "Sum of subjective regret (z)",
+  y_label = "Gain point (z)",
+  base_size = 14
+)
+```
+
+
+
+### SI: other emotions
+
+```{r}
+fit_emotion_loss <- function(emotion, loss) {
+  f <- reformulate(
+    c(loss, sprintf("(%s | user_id)", loss)),
+    response = emotion
+  )
+  lmer(f, data = dat_analysis)
+}
+
+emotions <- c("z_disappointment", "z_satisfaction", "z_successful")
+losses <- c("z_theo_inner_regret", "z_theo_outer_regret")
+
+si_emotion_models <- tidyr::expand_grid(emotion = emotions, loss = losses) |>
+  purrr::pmap(\(emotion, loss) {
+    m <- fit_emotion_loss(emotion, loss)
+    co <- summary(m)$coefficients
+    tibble::tibble(
+      emotion = emotion,
+      loss = loss,
+      beta = co[2, "Estimate"],
+      SE = co[2, "Std. Error"],
+      df = co[2, "df"],
+      t = co[2, "t value"],
+      p = co[2, "Pr(>|t|)"],
+      singular = lme4::isSingular(m)
+    )
+  }) |>
+  purrr::list_rbind()
+
+si_emotion_models
+```
+
+
+### The Relationship Between the Two Types of Regret
+
+```{r}
+dat_analysis <- dat_analysis |>
+  mutate(
+    theo_diff = theo_inner_regret - theo_outer_regret,
+    emo_diff = inner.regret - outer.regret
+  )
+
+ggplot(dat_analysis, aes(x = theo_diff)) +
+  geom_point(
+    aes(y = inner.regret),
+    alpha = 0.4,
+    size = 2,
+    color = "skyblue"
+  ) +
+  geom_smooth(
+    aes(y = inner.regret),
+    method = "loess",
+    se = FALSE,
+    color = "skyblue",
+    linetype = "dashed"
+  ) +
+  geom_point(
+    aes(y = outer.regret),
+    alpha = 0.4,
+    size = 2,
+    color = "orange"
+  ) +
+  geom_smooth(
+    aes(y = outer.regret),
+    method = "loess",
+    se = FALSE,
+    color = "orange",
+    linetype = "dashed"
+  ) +
+  geom_vline(xintercept = 0) +
+  labs(
+    x = "Theoretical regret difference (inner − outer)",
+    y = "Subjective regret",
+    title = "Correspondence between theoretical and subjective regret"
+  ) +
+  theme_minimal(base_size = 14)
+```
+
+
+# Sequential adjustment driven by regret signals
+
+```{r}
+# change in search set size ~ regret
+library(nlme)
+library(car)
+
+fixed_formula <- explore_count_diff ~ z_inner_regret + z_outer_regret + z_round
+ctrl <- lmeControl(opt = "optim", maxIter = 200)
+
+lm_null <- gls(
+  fixed_formula,
+  data = dat_analysis,
+  method = "ML",
+  na.action = na.omit
+)
+lmm_intercept <- lme(
+  fixed_formula,
+  random = ~ 1 | user_id,
+  data = dat_analysis,
+  method = "ML",
+  na.action = na.omit
+)
+lmm_slopes_diag <- lme(
+  fixed_formula,
+  random = list(user_id = pdDiag(~ z_inner_regret + z_outer_regret)),
+  data = dat_analysis,
+  method = "ML",
+  control = ctrl,
+  na.action = na.omit
+)
+lmm_slopes <- lme(
+  fixed_formula,
+  random = ~ z_inner_regret + z_outer_regret | user_id,
+  data = dat_analysis,
+  method = "ML",
+  control = ctrl,
+  na.action = na.omit
+)
+
+anova(lm_null, lmm_intercept, lmm_slopes_diag, lmm_slopes)
+
+summary(lmm_slopes_diag)
+Anova(lmm_slopes_diag, type = "3")
+```
+
+## β-visualization
+
+```{r}
+summary(lmm_slopes_diag)$tTable |>
+  as.data.frame() |>
+  tibble::rownames_to_column("term") |>
+  filter(term %in% c("z_outer_regret", "z_inner_regret")) |>
+  mutate(
+    regret_type = ifelse(
+      term == "z_outer_regret",
+      "Subjective breadth regret",
+      "Subjective depth regret"
+    ),
+    ci_low = Value + qt(0.025, df = 500) * Std.Error,
+    ci_high = Value + qt(0.975, df = 500) * Std.Error
+  ) |>
+  ggplot(aes(x = regret_type, y = Value, fill = regret_type)) +
+  geom_col(width = 0.6, alpha = 0.85) +
+  geom_jitter(
+    data = ranef(lmm_slopes_diag) |>
+      mutate(
+        `Subjective breadth regret` = z_outer_regret +
+          fixef(lmm_slopes_diag)["z_outer_regret"],
+        `Subjective depth regret` = z_inner_regret +
+          fixef(lmm_slopes_diag)["z_inner_regret"]
+      ) |>
+      pivot_longer(
+        c(`Subjective breadth regret`, `Subjective depth regret`),
+        names_to = "regret_type",
+        values_to = "slope"
+      ),
+    aes(x = regret_type, y = slope),
+    width = 0.15,
+    alpha = 0.4,
+    size = 1.8,
+    color = "black",
+    inherit.aes = FALSE
+  ) +
+  geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.15) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_fill_manual(
+    values = c(
+      "Subjective breadth regret" = "darkorange3",
+      "Subjective depth regret" = "steelblue3"
+    )
+  ) +
+  labs(x = NULL, y = expression(beta ~ "predicting" ~ Delta * k)) +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
+```
+
+## Other emotion
+```{r}
+lmm_satisfaction <- lme(
+  fixed = explore_count_diff ~
+    z_satisfaction +
+    z_round,
+  random = ~ 1 | user_id,
+  data = dat_analysis,
+  method = "ML",
+  na.action = na.omit
+)
+summary(lmm_satisfaction)
+
+Anova(lmm_satisfaction, type = "3")
+
+
+lmm_disappoint <- lme(
+  fixed = explore_count_diff ~
+    z_disappointment +
+    z_round,
+  random = ~ 1 | user_id,
+  data = dat_analysis,
+  method = "ML",
+  na.action = na.omit
+)
+summary(lmm_disappoint)
+
+Anova(lmm_disappoint, type = "3")
+
+
+lmm_success <- lme(
+  fixed = explore_count_diff ~
+    z_successful +
+    z_round,
+  random = ~ 1 | user_id,
+  data = dat_analysis,
+  method = "ML",
+  na.action = na.omit
+)
+summary(lmm_success)
+
+Anova(lmm_success, type = "3")
+```
+
+## Other emotion-randam slope
+```{r}
+lmm_satisfaction_si <- lme(
+  explore_count_diff ~ z_satisfaction + z_round,
+  random = list(user_id = pdDiag(~z_satisfaction)),
+  data = dat_analysis,
+  method = "ML",
+  control = ctrl,
+  na.action = na.omit
+)
+summary(lmm_satisfaction_si)
+
+
+lmm_disappoint_si <- lme(
+  explore_count_diff ~ z_disappointment + z_round,
+  random = list(user_id = pdDiag(~z_disappointment)),
+  data = dat_analysis,
+  method = "ML",
+  control = ctrl,
+  na.action = na.omit
+)
+summary(lmm_disappoint_si)
+
+
+lmm_success_si <- lme(
+  explore_count_diff ~ z_successful + z_round,
+  random = list(user_id = pdDiag(~z_successful)),
+  data = dat_analysis,
+  method = "ML",
+  control = ctrl,
+  na.action = na.omit
+)
+summary(lmm_success_si)
+```
+
+## Robustness check: controlling for current search-set size (k_t)
+
+```{r}
+dat_analysis <- dat_analysis |>
+  mutate(
+    z_k = as.numeric(scale(explore_count)),
+    z_k2 = as.numeric(scale(explore_count^2))
+  )
+
+lmm_slopes_diag_kt <- lme(
+  explore_count_diff ~ z_k + z_k2 + z_inner_regret + z_outer_regret + z_round,
+  random = list(user_id = pdDiag(~ z_inner_regret + z_outer_regret)),
+  data = dat_analysis,
+  method = "ML",
+  control = ctrl,
+  na.action = na.omit
+)
+summary(lmm_slopes_diag_kt)
+Anova(lmm_slopes_diag_kt, type = "3")
+```
+
+
+### Exploratory: additionally controlling for objective losses
+
+```{r}
+# breadth-/depth-deficit loss entered alongside both regrets and k_t (+ k_t^2)
+lmm_slopes_diag_kt_loss <- lme(
+  explore_count_diff ~ z_k +
+    z_k2 +
+    z_inner_regret +
+    z_outer_regret +
+    z_theo_inner_regret +
+    z_theo_outer_regret +
+    z_round,
+  random = list(user_id = pdDiag(~ z_inner_regret + z_outer_regret)),
+  data = dat_analysis,
+  method = "ML",
+  control = ctrl,
+  na.action = na.omit
+)
+summary(lmm_slopes_diag_kt_loss)
+Anova(lmm_slopes_diag_kt_loss, type = "3")
+```
+
+
+### Same k_t control applied to the other subjective responses (specificity check)
+
+```{r}
+lmm_satisfaction_si_kt <- lme(
+  explore_count_diff ~ z_k + z_k2 + z_satisfaction + z_round,
+  random = list(user_id = pdDiag(~z_satisfaction)),
+  data = dat_analysis,
+  method = "ML",
+  control = ctrl,
+  na.action = na.omit
+)
+summary(lmm_satisfaction_si_kt)
+Anova(lmm_satisfaction_si_kt, type = "3")
+
+
+lmm_disappoint_si_kt <- lme(
+  explore_count_diff ~ z_k + z_k2 + z_disappointment + z_round,
+  random = list(user_id = pdDiag(~z_disappointment)),
+  data = dat_analysis,
+  method = "ML",
+  control = ctrl,
+  na.action = na.omit
+)
+summary(lmm_disappoint_si_kt)
+Anova(lmm_disappoint_si_kt, type = "3")
+
+
+lmm_success_si_kt <- lme(
+  explore_count_diff ~ z_k + z_k2 + z_successful + z_round,
+  random = list(user_id = pdDiag(~z_successful)),
+  data = dat_analysis,
+  method = "ML",
+  control = ctrl,
+  na.action = na.omit
+)
+summary(lmm_success_si_kt)
+Anova(lmm_success_si_kt, type = "3")
+```
+
+
+# Behavioral adaptation toward the theoretical optimum
+
+### Initial classification (Above/Below optimum)
+```{r}
+initial_k <- dat_analysis |>
+  group_by(user_id) |>
+  slice_min(round, n = 1, with_ties = FALSE) |>
+  ungroup() |>
+  dplyr::select(user_id, initial_round = round, initial_k = explore_count)
+
+initial_k |> count(initial_round)
+
+dat_analysis <- dat_analysis |>
+  left_join(initial_k, by = "user_id") |>
+  mutate(
+    group = case_when(
+      is.na(initial_k) ~ NA_character_,
+      initial_round != 4 ~ NA_character_,
+      initial_k < 16 ~ "Below optimum", # simulation-derived benchmark k* = 16
+      TRUE ~ "Above optimum"
+    )
+  )
+
+dat_analysis |>
+  distinct(user_id, group, initial_k) |>
+  count(group)
+```
+
+### Visualization and interaction
+```{r}
+dat_analysis |>
+  filter(!is.na(group), group != "At optimum") |>
+  group_by(group, round) |>
+  summarise(
+    mean_k = mean(explore_count, na.rm = TRUE),
+    se_k = sd(explore_count, na.rm = TRUE) / sqrt(n()),
+    .groups = "drop"
+  ) |>
+  mutate(trial = round - 3) |>
+  ggplot(aes(x = trial, y = mean_k, color = group, fill = group)) +
+  geom_ribbon(
+    aes(ymin = mean_k - se_k, ymax = mean_k + se_k),
+    alpha = 0.15,
+    color = NA
+  ) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 16, linetype = "dotted", linewidth = 0.8) +
+  scale_x_continuous(breaks = 1:10) +
+  scale_color_manual(
+    values = c(
+      "Above optimum" = "darkorange3",
+      "Below optimum" = "steelblue3"
+    )
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Above optimum" = "darkorange3",
+      "Below optimum" = "steelblue3"
+    )
+  ) +
+  labs(x = "Trial", y = "Search set size (k)", color = NULL, fill = NULL) +
+  theme_minimal(base_size = 14)
+
+# group × round
+dat_group <- dat_analysis |>
+  filter(!is.na(group)) |>
+  mutate(
+    round_c = round - mean(round),
+    group_dummy = ifelse(group == "Above optimum", 0.5, -0.5)
+  )
+
+lmm_group <- lme(
+  explore_count ~ round_c * group_dummy,
+  random = ~ 1 | user_id,
+  data = dat_group,
+  method = "ML"
+)
+summary(lmm_group)
+Anova(lmm_group, type = "3")
+
+b_round <- fixef(lmm_group)["round_c"]
+b_interaction <- fixef(lmm_group)["round_c:group_dummy"]
+
+slope_above <- b_round + b_interaction * 0.5
+slope_below <- b_round + b_interaction * -0.5
+c(slope_above = slope_above, slope_below = slope_below)
+
+## Robustness Check
+dat_group_rtm <- dat_group |>
+  filter(round > initial_round) |>
+  mutate(round_c = round - mean(round))
+
+lmm_group_rtm <- lme(
+  explore_count ~ round_c * group_dummy,
+  random = ~ 1 | user_id,
+  data = dat_group_rtm,
+  method = "ML"
+)
+summary(lmm_group_rtm)
+Anova(lmm_group_rtm, type = "3")
+```
+
+
+# Testing for the optimal search set size in Lab
+
+```{r}
+k_mean <- mean(dat_analysis$explore_count, na.rm = TRUE)
+
+dat_analysis <- dat_analysis |>
+  mutate(explore_c = explore_count - k_mean)
+
+lmm_reward <- lme(
+  z_point ~ explore_c + I(explore_c^2),
+  random = ~ 1 | user_id,
+  data = dat_analysis,
+  method = "REML",
+  na.action = na.omit
+)
+
+b <- fixef(lmm_reward)
+b1 <- b["explore_c"]
+b2 <- b["I(explore_c^2)"]
+
+
+k_emp_centered <- -b1 / (2 * b2)
+k_emp <- k_emp_centered + k_mean
+k_emp
+```
+
+```{r}
+# Participant Cluster Bootstrap
+set.seed(1)
+
+boot_k <- replicate(2000, {
+  ids <- sample(unique(dat_analysis$user_id), replace = TRUE)
+
+  d <- purrr::map2_dfr(ids, seq_along(ids), function(uid, i) {
+    dat_analysis |>
+      dplyr::filter(user_id == uid) |>
+      dplyr::mutate(boot_id = paste0(uid, "_", i))
+  })
+
+  fit <- try(
+    lme(
+      z_point ~ explore_c + I(explore_c^2),
+      random = ~ 1 | boot_id,
+      data = d,
+      method = "REML"
+    ),
+    silent = TRUE
+  )
+  if (inherits(fit, "try-error")) {
+    return(NA)
+  }
+
+  bb <- fixef(fit)
+  b1_i <- bb["explore_c"]
+  b2_i <- bb["I(explore_c^2)"]
+  if (b2_i >= 0) {
+    return(NA)
+  }
+
+  (-b1_i / (2 * b2_i)) + k_mean
+})
+
+quantile(boot_k, c(.025, .975), na.rm = TRUE)
+```
+
+
+```{r}
+n_valid <- sum(!is.na(boot_k))
+n_total <- length(boot_k)
+n_valid
+n_valid / n_total
+
+hist(boot_k, breaks = 50)
+summary(boot_k)
+```
+
+```{r}
+summary(lmm_reward)
+```
+
+```{r}
+lmm_linear <- lme(
+  z_point ~ explore_c,
+  random = ~ 1 | user_id,
+  data = dat_analysis,
+  method = "ML"
+)
+lmm_reward_ml <- update(lmm_reward, method = "ML")
+AIC(lmm_linear, lmm_reward_ml)
+```
+
+```{r}
+boot_valid <- boot_k[!is.na(boot_k)]
+
+median(boot_valid)
+
+k_range <- range(dat_analysis$explore_count, na.rm = TRUE)
+boot_trunc <- boot_valid[boot_valid >= k_range[1] & boot_valid <= k_range[2]]
+
+length(boot_trunc) / length(boot_valid)
+quantile(boot_trunc, c(.025, .975))
+median(boot_trunc) # reported median, same (truncated) distribution as the CI above
+```
+
+
+# SI:Within-Set Behavior
+```{r}
+dat_analysis |>
+  mutate(
+    trial = round - 3,
+    session = ifelse(trial <= 5, "Early (Trial 1–5)", "Late (Trial 6–10)"),
+    selected_best = theo_inner_regret == 0,
+    k_bin = cut(
+      explore_count,
+      breaks = c(0, 10, 15, 20, 25, 30, Inf),
+      labels = c("≤10", "11–15", "16–20", "21–25", "26–30", ">30")
+    )
+  ) |>
+  group_by(k_bin, session) |>
+  summarise(
+    prob_best = mean(selected_best, na.rm = TRUE),
+    n = n(),
+    se = sqrt(prob_best * (1 - prob_best) / n),
+    .groups = "drop"
+  ) |>
+  ggplot(aes(x = k_bin, y = prob_best, color = session, group = session)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 3) +
+  geom_errorbar(
+    aes(ymin = prob_best - se, ymax = prob_best + se),
+    width = 0.2
+  ) +
+  scale_color_manual(
+    values = c(
+      "Early (Trial 1–5)" = "steelblue3",
+      "Late (Trial 6–10)" = "darkorange3"
+    )
+  ) +
+  scale_y_continuous(limits = c(0, 1), labels = scales::percent_format()) +
+  labs(
+    x = "Search set size (k)",
+    y = "P(selecting best within set)",
+    color = NULL
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "top")
+```
+
+```{r}
+library(lme4)
+
+### selected_best = observed_best == user_chosen_point
+dat_ws <- dat_analysis |>
+  mutate(
+    selected_best = as.integer(theo_inner_regret == 0),
+    k_z = as.numeric(scale(explore_count))
+  )
+
+mean(dat_ws$selected_best)
+
+glmer_ws <- glmer(
+  selected_best ~ z_round + k_z + (1 | user_id),
+  data = dat_ws,
+  family = binomial,
+  na.action = na.omit
+)
+summary(glmer_ws)
+```
+
+```{r}
+glm_ws <- glm(
+  selected_best ~ z_round + k_z,
+  data = dat_ws,
+  family = binomial,
+  na.action = na.omit
+)
+summary(glm_ws)
+
+glm_ws_raw <- glm(
+  selected_best ~ I(round - 3) + explore_count,
+  data = dat_ws,
+  family = binomial,
+  na.action = na.omit
+)
+cbind(
+  OR = exp(coef(glm_ws_raw)),
+  exp(confint.default(glm_ws_raw))
+)
+```
+
+
+
+# SI:Concentration of Within-Set Sampling
+
+```{r}
+# Participants × Trials × Options: View Count Rank and Percentage of Total Views (Out of 40)
+vlong <- dat_analysis |>
+  drop_na(observed_choice_order, round) |>
+  separate_rows(observed_choice_order, sep = "_") |>
+  filter(observed_choice_order != "") |>
+  count(user_id, round, observed_choice_order, name = "view_count") |>
+  group_by(user_id, round) |>
+  arrange(desc(view_count), .by_group = TRUE) |>
+  mutate(
+    rank = row_number(),
+    share = view_count / sum(view_count)
+  ) |>
+  ungroup() |>
+  mutate(
+    trial = round - 3,
+    phase = ifelse(trial <= 5, "Early (trials 1–5)", "Late (trials 6–10)")
+  )
+
+vlong |>
+  count(rank) |>
+  mutate(
+    frac = n /
+      dplyr::n_distinct(paste(dat_analysis$user_id, dat_analysis$round))
+  ) |>
+  head(20)
+```
+
+
+### Changes in Sampling Within the search set for Each Trial
+```{r}
+library(tidyverse)
+
+seq_len_check <- dat_analysis |>
+  mutate(n_tokens = str_count(observed_choice_order, "_") + 1) |>
+  count(n_tokens)
+seq_len_check
+
+# Entropy of the Distribution of sampling by User and Round
+solid_data <- dat_analysis |>
+  drop_na(observed_choice_order, round) |>
+  separate_rows(observed_choice_order, sep = "_") |>
+  filter(observed_choice_order != "") |>
+  count(user_id, round, observed_choice_order, name = "view_count") |>
+  group_by(user_id, round) |>
+  mutate(p = view_count / sum(view_count)) |>
+  summarise(
+    entropy = -sum(p * log2(p)),
+    n_options = dplyr::n(),
+    total_views = sum(view_count),
+    .groups = "drop"
+  ) |>
+  mutate(
+    evenness = entropy / log2(n_options)
+  )
+
+# Point amd search set size
+reward_data <- dat_analysis |>
+  dplyr::select(user_id, round, user_chosen_point, explore_count) |>
+  distinct()
+
+analysis_df <- solid_data |>
+  left_join(reward_data, by = c("user_id", "round")) |>
+  mutate(
+    z_point = as.numeric(scale(user_chosen_point)),
+    z_entropy = as.numeric(scale(entropy)),
+    z_evenness = as.numeric(scale(evenness)),
+    z_k = as.numeric(scale(explore_count)),
+    z_k2 = as.numeric(scale(explore_count^2)),
+    z_round = as.numeric(scale(round))
+  )
+
+cor(analysis_df[c("entropy", "evenness", "explore_count")])
+```
+
+### SI figure 1: allocation shape by trial 
+```{r}
+library(ggplot2)
+library(ggeffects)
+
+pal <- "#c0392b"
+MAXR <- 15
+
+fd <- vlong |>
+  filter(rank <= MAXR) |>
+  group_by(trial, rank) |>
+  summarise(m = mean(share), se = sd(share) / sqrt(n()), .groups = "drop") |>
+  mutate(trial_f = factor(paste("Trial", trial), levels = paste("Trial", 1:10)))
+ref <- fd |>
+  filter(trial == 1) |>
+  dplyr::select(rank, ref = m) |>
+  tidyr::crossing(
+    trial_f = factor(paste("Trial", 1:10), levels = paste("Trial", 1:10))
+  )
+
+fig_allocation <- ggplot(fd, aes(rank, m)) +
+  geom_col(aes(fill = m), width = 0.9) +
+  geom_line(
+    data = ref,
+    aes(rank, ref),
+    colour = "grey35",
+    linewidth = 0.5,
+    linetype = "dashed"
+  ) +
+  facet_wrap(~trial_f, nrow = 2) +
+  scale_fill_viridis_c(option = "mako", direction = -1, guide = "none") +
+  scale_x_continuous(breaks = c(1, 5, 10, 15)) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    x = "Option rank within a trial  (1 = most sampled)",
+    y = "Mean share of the 40 views",
+    tag = "a"
+  ) +
+  theme_classic(base_size = 14) + # Figure 1 と同じ
+  theme(
+    plot.tag = element_text(face = "bold", size = 17),
+    panel.spacing = unit(0.7, "lines"),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 13)
+  )
+fig_allocation
+```
+
+### SI figure 2: concentration → payoff 
+```{r}
+m_pay <- lmer(
+  z_point ~ z_evenness + z_k + z_k2 + z_round + (1 | user_id),
+  data = analysis_df
+)
+
+pay_m <- mean(analysis_df$user_chosen_point)
+pay_sd <- sd(analysis_df$user_chosen_point)
+sd_e <- sd(analysis_df$evenness)
+m_e <- mean(analysis_df$evenness)
+q <- as.numeric(quantile(analysis_df$evenness, c(.05, .95)))
+zs <- (seq(q[1], q[2], length = 80) - m_e) / sd_e
+prd <- as.data.frame(
+  ggpredict(
+    m_pay,
+    terms = sprintf("z_evenness [%s]", paste(zs, collapse = ","))
+  )
+) |>
+  mutate(
+    evenness = x * sd_e + m_e,
+    across(c(predicted, conf.low, conf.high), ~ .x * pay_sd + pay_m) # z → 素点
+  )
+
+fig_concentration_payoff <- ggplot(prd, aes(evenness, predicted)) +
+  geom_ribbon(
+    aes(ymin = conf.low, ymax = conf.high),
+    fill = pal,
+    alpha = 0.18
+  ) +
+  geom_line(colour = pal, linewidth = 1.2) +
+  scale_x_reverse(labels = scales::number_format(accuracy = 0.01)) +
+  labs(
+    x = expression(
+      "Evenness of allocation  " *
+        (italic(H) / log[2] * italic(k)) *
+        "   (" *
+        symbol('\254') *
+        " more concentrated)"
+    ),
+    y = "Model-predicted payoff (points)",
+    tag = "b"
+  ) +
+  theme_classic(base_size = 14) + # Figure 1 と同じ
+  theme(plot.tag = element_text(face = "bold", size = 17))
+fig_concentration_payoff
+```
+
+```{r}
+trend_ev <- summary(lmer(
+  z_evenness ~ z_round + (1 | user_id),
+  data = analysis_df
+))$coefficients["z_round", ]
+trend_en <- summary(lmer(
+  z_entropy ~ z_round + (1 | user_id),
+  data = analysis_df
+))$coefficients["z_round", ]
+pay_ev <- summary(m_pay)$coefficients["z_evenness", ]
+pay_en <- summary(
+  lmer(
+    z_point ~ z_entropy + z_k + z_k2 + z_round + (1 | user_id),
+    data = analysis_df
+  )
+)$coefficients["z_entropy", ]
+cap <- function(tag, co) {
+  cat(sprintf(
+    "%-30s β = %+.2f, SE = %.2f, t(%.0f) = %+.2f, p = %.3g\n",
+    tag,
+    co[1],
+    co[2],
+    co[3],
+    co[4],
+    co[5]
+  ))
+}
+cap("Fig 1  evenness ~ trial", trend_ev)
+cap("       entropy  ~ trial", trend_en)
+cap("Fig 2  payoff ~ evenness", pay_ev)
+cap("       payoff ~ entropy", pay_en)
+```
+
+```{r}
+ggplot(analysis_df, aes(explore_count, entropy)) +
+  geom_point(alpha = 0.2, size = 0.9, colour = "grey35") +
+  geom_smooth(
+    method = "loess",
+    formula = y ~ x,
+    colour = "grey20",
+    se = FALSE,
+    linewidth = 0.8
+  ) +
+  labs(
+    x = "Search-set size (k)",
+    y = "Raw entropy (bits)",
+    subtitle = paste0(
+      "r(entropy, k) = ",
+      round(cor(analysis_df$entropy, analysis_df$explore_count), 2),
+      "   |   r(evenness, k) = ",
+      round(cor(analysis_df$evenness, analysis_df$explore_count), 2)
+    )
+  ) +
+  theme_classic(base_size = 12)
+```
+
+
+### LMM
+```{r}
+library(lme4)
+library(lmerTest)
+
+model_trend <- lmer(z_entropy ~ z_round + (1 | user_id), data = analysis_df)
+summary(model_trend) # β for z_round
+
+model_trend_even <- lmer(
+  z_evenness ~ z_round + (1 | user_id),
+  data = analysis_df
+)
+summary(model_trend_even)
+
+lmer(entropy ~ I(round - 3) + (1 | user_id), data = analysis_df) |>
+  fixef() # b = bits per trial
+```
+
+```{r}
+library(car)
+
+summary(lmer(z_point ~ z_entropy + z_round + (1 | user_id), data = analysis_df))
+
+model_reward_k2 <- lmer(
+  z_point ~ z_entropy + z_k + z_k2 + z_round + (1 | user_id),
+  data = analysis_df
+)
+summary(model_reward_k2)
+vif(model_reward_k2)
+
+model_reward_even <- lmer(
+  z_point ~ z_evenness + z_k + z_k2 + z_round + (1 | user_id),
+  data = analysis_df
+)
+summary(model_reward_even)
+vif(model_reward_even)
+```
