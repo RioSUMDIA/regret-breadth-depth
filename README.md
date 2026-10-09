@@ -1,8 +1,20 @@
 # Regret Signals Whether to Search More Broadly or More Deeply
 
-Data and code for:
+## Associated Manuscript
 
-Sumida, R., Suganuma, H., Mori, R., Muramoto, Y., & Kameda, T. Regret signals whether to search more broadly or more deeply.
+The materials in this repository were developed for the following manuscript:
+
+**Regret Signals Whether to Search More Broadly or More Deeply**
+
+Authors: Rio Sumida, Hidezo Suganuma, Ryutaro Mori, Yukiko Muramoto, and Tatsuya Kameda
+
+Status: Submitted for peer review on October 9, 2026.
+
+These materials are provided to support the transparency and reproducibility of the research described in the manuscript. The manuscript is currently under review and has not yet been published.
+
+If you use or build upon these materials, please acknowledge the original authors and cite the associated manuscript when it becomes available.
+
+Until the manuscript is published, these materials may be used only for the purpose of evaluating and reproducing the analyses reported in the manuscript; please do not use the data or code in other publications without contacting the authors.
 
 ## Contents
 
