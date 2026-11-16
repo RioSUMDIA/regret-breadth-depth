@@ -805,8 +805,11 @@
     //  self_best : 自分のコック＋候補集合内ベストのコック（全体ベストの星なし）
     //  full      : 自分のコック＋候補集合内ベスト＋全体ベスト
     const FEEDBACK_CONDITIONS = ["self", "self_best", "full"];
-    const FEEDBACK_CONDITION =
-      FEEDBACK_CONDITIONS[Math.floor(Math.random() * FEEDBACK_CONDITIONS.length)];
+    const __params = new URLSearchParams(location.search);
+    const __condParam = __params.get("cond"); // テスト用: ?cond=self|self_best|full
+    const FEEDBACK_CONDITION = FEEDBACK_CONDITIONS.includes(__condParam)
+      ? __condParam
+      : FEEDBACK_CONDITIONS[Math.floor(Math.random() * FEEDBACK_CONDITIONS.length)];
     const SHOW_OBS_BEST = FEEDBACK_CONDITION !== "self";
     const SHOW_GLOBAL_BEST = FEEDBACK_CONDITION === "full";
     console.log("feedback condition:", FEEDBACK_CONDITION);
@@ -1893,7 +1896,13 @@
           // jsPsych.data.get().localSave("json", jsonName);
           const all_trial_data = jsPsych.data.get().json();
           // all_trial_data._meta = { expId, pid, sid, createdAt: Date.now() };
-          push(db_ref, all_trial_data);
+          // 書き込み完了を待つ（失敗・タイムアウト時は catch へ）
+          await Promise.race([
+            push(db_ref, all_trial_data),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("save timeout")), 15000)
+            ),
+          ]);
           __saveMessage = "保存完了";
         } catch (e) {
           console.error("Save failed:", e);
