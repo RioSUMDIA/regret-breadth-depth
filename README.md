@@ -74,3 +74,15 @@ Run all cells of `beta_paper_RS_fixed.ipynb` from top to bottom. The simulation 
 Settings: 40 options with true values drawn from Beta(2, 2), a sampling budget of T = 40, observation noise σ = 0.5, UGapEb exploration parameter b = 0.001, and 10,000 simulated pools (random seed 777). The full simulation takes about 5 minutes on a recent laptop.
 
 Tested with Python 3.13.3 and numpy 2.5.3, pandas 3.0.6, scipy 1.18.1, matplotlib 3.11.2, and tqdm 4.70.1.
+
+## Tests (save check for `public/index_conditions_forclass.html`)
+
+Headless Playwright test that runs the whole task through the real UI in about 30 s, with the Firebase SDK stubbed out (nothing is written to the production database). It checks, for each feedback condition, that the data are saved once to `post_class` with 12 blocks, all five ratings, and the correct `feedback_condition`, and that a failed save is reported to the participant.
+
+```
+python3 -m venv .venv && .venv/bin/pip install playwright pytest pytest-playwright
+.venv/bin/playwright install chromium
+.venv/bin/python -m pytest tests
+```
+
+The page loads jsPsych from unpkg, so an internet connection is needed. A condition can be fixed with `?cond=self|self_best|full`.
