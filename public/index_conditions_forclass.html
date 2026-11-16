@@ -1885,7 +1885,8 @@
     let __saveMessage = "データ保存中…";
     const saveDataTrial = {
       type: jsPsychCallFunction,
-      func: async function () {
+      async: true, // done() が呼ばれるまで次の画面（finish）に進まない
+      func: async function (done) {
         const expId = "demo_v1";
         const pid = jsPsych.randomization.randomID(8);
         const sid = jsPsych.randomization.randomID(6);
@@ -1907,6 +1908,8 @@
         } catch (e) {
           console.error("Save failed:", e);
           __saveMessage = "保存に失敗しました";
+        } finally {
+          done();
         }
       },
     };

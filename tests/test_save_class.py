@@ -18,6 +18,7 @@ export const ref = (db, path) => ({ path });
 export const push = async (r, value) => {
   window.__saved = window.__saved || [];
   window.__saved.push({ path: r.path, value });
+  if (window.__pushDelay) await new Promise((res) => setTimeout(res, window.__pushDelay));
   if (window.__failSave) throw new Error("mock save failure");
   return {};
 };
@@ -42,46 +43,77 @@ def click_btn(page, text=None):
     loc.first.click()
 
 
-def do_block(page):
-    """探索(40回観察) → 選択 → 確認 → フィードバック → 後悔アンケート"""
+def do_block(page, k=None, ratings=None):
+    """探索(40日) → 選択 → 確認 → フィードバック → 後悔アンケート
+
+    k: 探索個数。最初のコックを調べ、「新たなコックを調べる」で k-1 人追加し、
+       残りの日数は最初のコックの再観測で消化する(合計40クリック)。None なら 1 人だけ。
+    ratings: 5項目の評定値(スライダーの並び順)。None なら PageUp(=10)。
+    戻り値: {"k": ..., "ratings": {項目名: 値}}
+    """
     page.wait_for_selector("#grid .opt")
-    # 最初のコックを40回調べる (クリック残数を使い切る)
-    page.evaluate("""() => {
+    page.wait_for_selector(".choose-msg", state="detached")
+    k_used = k or 1
+    page.evaluate(
+        """(k) => {
       const c = document.querySelector('#grid .opt');
-      for (let i = 0; i < 40; i++) c.click();
-    }""")
+      const add = document.getElementById('add-card');
+      c.click();
+      for (let i = 0; i < k - 1; i++) add.click();
+      for (let i = 0; i < 40 - k; i++) c.click();
+    }""",
+        k_used,
+    )
     page.click("#proceed-to-choice")
-    page.wait_for_selector("#grid .opt:not(.disabled)")
+    page.wait_for_selector(".choose-msg")
     page.locator("#grid .opt:not(.disabled)").first.click()
     page.wait_for_selector("#confirm-root")
     click_btn(page, "次へ")
     page.wait_for_selector(".summary-wrap")
     click_btn(page, "次へ")
-    # SurveyJS のスライダー (必須) に値を入れて送信
-    page.wait_for_selector(".sd-question")
-    fill_survey_sliders(page)
-    page.locator("input.sd-navigation__complete-btn, .sd-navigation__complete-btn").first.click()
+    page.wait_for_selector("input[type=range]")
+    set_ratings = fill_survey_sliders(page, ratings)
+    page.locator(".sd-navigation__complete-btn").first.click()
+    return {"k": k_used, "ratings": set_ratings}
 
 
-def fill_survey_sliders(page):
+def fill_survey_sliders(page, ratings=None):
+    """各スライダーに実キー入力で値を入れ、{項目名: 値} を返す(DOMから読み戻す)。"""
     sliders = page.locator("input[type=range]")
+    out = {}
     for i in range(sliders.count()):
-        sliders.nth(i).focus()
-        page.keyboard.press("PageUp")
+        sl = sliders.nth(i)
+        sl.focus()
+        if ratings is None:
+            page.keyboard.press("PageUp")
+        else:
+            page.keyboard.press("Home")
+            for _ in range(ratings[i]):
+                page.keyboard.press("ArrowRight")
+        name = sl.evaluate("e => e.closest('[data-name]')?.dataset.name")
+        out[name] = int(sl.input_value())
+        if ratings is not None:
+            assert out[name] == ratings[i], f"slider {i} ({name}): {out[name]} != {ratings[i]}"
+    return out
 
 
-def run_experiment(page, cond, fail=False):
+def run_experiment(page, cond, fail=False, delay=0, plan=None):
+    """plan: ブロックごとの (k, ratings) のリスト(練習2 + 本番10 = 12個)。None なら既定動作。"""
     if fail:
         page.add_init_script("window.__failSave = true;")
+    if delay:
+        page.add_init_script(f"window.__pushDelay = {delay};")
+    page.__done = []
     page.goto(f"file://{PAGE}?cond={cond}")
     # 説明スライド
     page.wait_for_selector(".slide-img")
     for _ in range(SLIDES[cond]):
         page.keyboard.press("ArrowRight")
     click_btn(page, "OK")
+    blk = iter(plan or [(None, None)] * 12)
     for _ in range(2):  # 練習
         click_btn(page, "開始")
-        do_block(page)
+        page.__done.append(do_block(page, *next(blk)))
     click_btn(page, "確認テストへ")
     # 確認テスト: 全選択
     page.wait_for_selector("input[type=checkbox]")
@@ -92,7 +124,7 @@ def run_experiment(page, cond, fail=False):
     click_btn(page, "本番を始める")
     for _ in range(10):  # 本番
         click_btn(page, "開始")
-        do_block(page)
+        page.__done.append(do_block(page, *next(blk)))
     # 属性
     page.wait_for_selector("text=性別")
     page.locator("text=男性").first.click()
@@ -130,3 +162,36 @@ def test_result_is_saved(pg, cond):
 def test_failure_is_reported(pg):
     run_experiment(pg, "full", fail=True)
     pg.wait_for_selector("text=保存に失敗しました")
+
+
+def test_saved_message_shown_with_slow_network(pg):
+    """保存に時間がかかっても、終了画面は保存完了を待ってから「保存完了」を表示する。"""
+    run_experiment(pg, "self", delay=400)
+    pg.wait_for_selector("text=保存完了", timeout=5000)
+    assert "データ保存中" not in pg.inner_text("body")
+
+
+KS = [3, 5, 28]
+RATING_SETS = [[20, 81, 20, 81, 20], [81, 20, 81, 20, 81]]
+
+
+def test_explore_count_and_ratings_are_saved(pg):
+    """探索個数(3, 5, 28)と感情評定(20, 81)をブロックごとに変えて、そのまま保存されるか。"""
+    plan = [(KS[i % 3], RATING_SETS[i % 2]) for i in range(12)]
+    saved = run_experiment(pg, "full", delay=200, plan=plan)
+    rows = json.loads(saved[0]["value"])
+
+    # 探索集合サイズ k: 探索行(observed_choice_order あり)の distinct なコック数
+    explore = [r for r in rows if r.get("observed_choice_order")]
+    assert len(explore) == 12
+    got_k = [len(set(r["observed_choice_order"].split("_"))) for r in explore]
+    assert got_k == [KS[i % 3] for i in range(12)]
+    assert all(r["explore_count"] == 40 for r in explore)  # 使った日数は常に40
+
+    # 感情評定: 画面で入力した値(DOM読み戻し)が保存値と一致
+    resp = [r["response"] for r in rows if isinstance(r.get("response"), dict) and "outer-regret" in r["response"]]
+    assert len(resp) == 12
+    for i, (r, done) in enumerate(zip(resp, pg.__done)):
+        for name, v in done["ratings"].items():
+            assert r[name] == v, f"block {i}: {name} saved {r[name]} != entered {v}"
+        assert sorted(r[n] for n in done["ratings"]) == sorted(RATING_SETS[i % 2])
